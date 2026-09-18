@@ -212,7 +212,10 @@ export function LiveFuelStatus({ readOnly = false, displayMode = false }: { read
   }
 
   function openFuelFarmDisplay() {
-    window.open("/live-fuel-status-display", "_blank", "noopener,noreferrer");
+    const displayUrl = import.meta.env.MODE === "github-pages"
+      ? `${import.meta.env.BASE_URL}#/live-fuel-status-display`
+      : "/live-fuel-status-display";
+    window.open(displayUrl, "_blank", "noopener,noreferrer");
   }
 
   return (
