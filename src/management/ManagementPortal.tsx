@@ -13,9 +13,10 @@ import {
   Wrench,
   LogOut,
 } from "lucide-react";
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useBranding } from "../branding/BrandingContext";
 import { canAccessManagementPath, clearCurrentUser, loadCurrentUser, loadUsers, rolePermissions, setCurrentUser, type ManagedUser } from "../data/userAccessStore";
+import { LoginScreen } from "../branding/LoginScreen";
 import { Dashboard } from "./screens/Dashboard";
 import { LiveFuelStatus } from "./screens/LiveFuelStatus";
 import {
@@ -171,13 +172,9 @@ export function ManagementPortal() {
 }
 
 function ManagementLogin({ onLogin }: { onLogin: (user: ManagedUser) => void }) {
-  const { branding } = useBranding();
-  const [fullName, setFullName] = useState("Admin User");
-  const [pin, setPin] = useState("1234");
   const [error, setError] = useState("");
 
-  function submit(event: FormEvent) {
-    event.preventDefault();
+  function submit(fullName: string, pin: string) {
     const user = loadUsers().find((item) => item.fullName.trim().toLowerCase() === fullName.trim().toLowerCase() && item.pin === pin);
     if (!user) {
       setError("Full Name or PIN is not recognised.");
@@ -196,38 +193,7 @@ function ManagementLogin({ onLogin }: { onLogin: (user: ManagedUser) => void }) 
     onLogin(loggedInUser);
   }
 
-  return (
-    <main className="employee-login management-login" style={branding.loginBackground ? { backgroundImage: `url(${branding.loginBackground})` } : undefined}>
-      <section className="login-panel">
-        <div className="brand-block large">
-          <span className="brand-mark">{branding.logo ? <img src={branding.logo} alt="Company logo" /> : "T"}</span>
-          <div>
-            <strong>{branding.companyName}</strong>
-            <span>Management Portal</span>
-          </div>
-        </div>
-        <form onSubmit={submit} className="login-form">
-          <label>
-            Full Name
-            <input value={fullName} onChange={(event) => setFullName(event.target.value)} autoComplete="name" />
-          </label>
-          <label>
-            PIN
-            <input value={pin} onChange={(event) => setPin(event.target.value)} inputMode="numeric" maxLength={4} type="password" />
-          </label>
-          {error && <p className="form-error">{error}</p>}
-          <button className="primary-button wide-button" type="submit">
-            <UserRound size={18} />
-            Management Sign In
-          </button>
-          <NavLink to="/employee" className="secondary-button wide-button management-signin-link">
-            <UserRound size={18} />
-            Employee Portal
-          </NavLink>
-        </form>
-      </section>
-    </main>
-  );
+  return <LoginScreen onLogin={submit} error={error} management />;
 }
 
 function AccessDenied({ requested }: { requested: string }) {

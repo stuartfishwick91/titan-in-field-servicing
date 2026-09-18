@@ -1,6 +1,7 @@
-import { AlertTriangle, ClipboardCheck, Eye, Fuel, Home, QrCode, Send, Truck, UserRound, Wrench } from "lucide-react";
-import { FormEvent, useEffect, useState } from "react";
+import { AlertTriangle, ClipboardCheck, Eye, Fuel, Home, QrCode, Send, Truck, Wrench } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { LoginScreen } from "../branding/LoginScreen";
 import { useBranding } from "../branding/BrandingContext";
 import { loadFuelSubmissions, saveFuelSubmissions } from "../data/fuelSubmissionStore";
 import { loadServiceTrucks, saveServiceTrucks, type ServiceTruckOilGroup } from "../data/serviceTruckStore";
@@ -45,11 +46,10 @@ function currentReportDate() {
 
 export function EmployeePortal() {
   const { branding } = useBranding();
+
   const navigate = useNavigate();
   const [employee, setEmployee] = useState<string | null>(null);
   const [employeeUser, setEmployeeUser] = useState<ManagedUser | null>(null);
-  const [fullName, setFullName] = useState("Stuart Fishwick");
-  const [pin, setPin] = useState("1234");
   const [error, setError] = useState("");
   const [tab, setTab] = useState<Tab>("home");
   const [notice, setNotice] = useState("");
@@ -60,16 +60,7 @@ export function EmployeePortal() {
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
-  function handleLogin(event: FormEvent) {
-    event.preventDefault();
-    signIn("employee");
-  }
-
-  function handleManagementLogin() {
-    signIn("management");
-  }
-
-  function signIn(target: "employee" | "management") {
+  function signIn(fullName: string, pin: string) {
     const user = loadUsers().find((item) => item.fullName.trim().toLowerCase() === fullName.trim().toLowerCase() && item.pin === pin);
     if (!user) {
       setError("Full Name or PIN is not recognised.");
@@ -79,10 +70,7 @@ export function EmployeePortal() {
       setError("This user is disabled or not currently active.");
       return;
     }
-    if (target === "management" && user.role !== "Administrator" && user.role !== "Supervisor") {
-      setError("This login does not have Management Portal access.");
-      return;
-    }
+
     const loggedInUser = setCurrentUser(user);
     setError("");
     if (loggedInUser.role === "Administrator" || loggedInUser.role === "Supervisor") {
@@ -97,38 +85,7 @@ export function EmployeePortal() {
   }
 
   if (!employee) {
-    return (
-      <main className="employee-login" style={branding.loginBackground ? { backgroundImage: `url(${branding.loginBackground})` } : undefined}>
-        <section className="login-panel">
-          <div className="brand-block large">
-            <span className="brand-mark">{branding.logo ? <img src={branding.logo} alt="Company logo" /> : "T"}</span>
-            <div>
-              <strong>{branding.companyName}</strong>
-              <span>Employee Portal</span>
-            </div>
-          </div>
-          <form onSubmit={handleLogin} className="login-form">
-            <label>
-              Full Name
-              <input value={fullName} onChange={(event) => setFullName(event.target.value)} autoComplete="name" />
-            </label>
-            <label>
-              PIN
-              <input value={pin} onChange={(event) => setPin(event.target.value)} inputMode="numeric" maxLength={4} type="password" />
-            </label>
-            {error && <p className="form-error">{error}</p>}
-            <button className="primary-button wide-button" type="submit">
-              <UserRound size={18} />
-              Employee Sign In
-            </button>
-            <button className="secondary-button wide-button management-signin-link" type="button" onClick={handleManagementLogin}>
-              <UserRound size={18} />
-              Management Sign In
-            </button>
-          </form>
-        </section>
-      </main>
-    );
+    return <LoginScreen onLogin={signIn} error={error} />;
   }
 
   return (

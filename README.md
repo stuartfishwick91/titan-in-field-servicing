@@ -2,6 +2,10 @@
 
 Working source imported from `Titan_InField_Servicing_Transfer_20260918-182343.zip`.
 
+The login uses the original background and final wordmark from `Titan_InField_Servicing_Latest_Handover_2026-09-18.zip`. These assets live in `public/branding/` and load directly from the website; they do not need to be uploaded into each browser. The handover contained artwork and specifications, not replacement app source.
+
+Sign in with a full name and the existing four-digit PIN. The single login routes employees and management to their respective portals. Remember me stores the name only, never the PIN. SSO and email recovery are not connected; their controls explain the available trial access.
+
 ## Live trial
 
 - [Employee portal](https://stuartfishwick91.github.io/titan-in-field-servicing/#/employee)
