@@ -109,11 +109,11 @@ export function EmployeePortal() {
         )}
         {tab === "daily" && <DailySheetTab onSend={() => setNotice("Daily fuel ups submitted successfully")} />}
       </section>
-      <nav className="bottom-tabs">
+      <nav className="bottom-tabs" aria-label="Employee navigation">
         {tabsForUser(employeeUser).map((item) => {
           const Icon = item.icon;
           return (
-            <button key={item.id} className={tab === item.id ? "active" : ""} onClick={() => setTab(item.id)} type="button">
+            <button key={item.id} className={tab === item.id ? "active" : ""} aria-current={tab === item.id ? "page" : undefined} onClick={() => setTab(item.id)} type="button">
               <Icon size={20} />
               <span>{item.label}</span>
             </button>
@@ -180,7 +180,7 @@ function HomeTab({
   }
 
   return (
-    <div className="employee-tab">
+    <div className="employee-tab employee-home">
       <p className="eyebrow">Day shift - Workshop and Pit 3</p>
       <h2>Welcome, {employee.split(" ")[0]}</h2>
       <section className="employee-home-card supervisor-card">
