@@ -1,6 +1,8 @@
+import { readSharedItem, writeSharedItem } from "../../cloud/sharedStorage";
 import { Bell, Download, Droplets, Edit2, FileText, Plus, Printer, QrCode, Save, Upload, UserRound } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
+import { LocalBackupButton } from "../../data/LocalBackupButton";
 import { defaultBranding, fileToDataUrl, useBranding, type BrandingSettings } from "../../branding/BrandingContext";
 import { loadServiceTrucks, saveServiceTrucks, type ServiceTruckOilGroup, type ServiceTruckRecord } from "../../data/serviceTruckStore";
 import { loadBulkTanks, productIdForName, saveBulkTanks } from "../../data/bulkTankStore";
@@ -2260,7 +2262,7 @@ export function Reports() {
   const [dailyFuelFilters, setDailyFuelFilters] = useState({ dateIso: reportTodayIso, date: reportToday, shift: "All", fuelSource: "All" });
   const [exportedFuelSheets, setExportedFuelSheets] = useState<Record<string, string>>(() => {
     try {
-      return JSON.parse(localStorage.getItem("titan-daily-fuel-sheet-export-history-v1") ?? "{}") as Record<string, string>;
+      return JSON.parse(readSharedItem("titan-daily-fuel-sheet-export-history-v1") ?? "{}") as Record<string, string>;
     } catch {
       return {};
     }
@@ -2342,7 +2344,7 @@ export function Reports() {
     const exportedAt = new Date().toLocaleString();
     const nextExportedFuelSheets = { ...exportedFuelSheets, [dailyFuelExportKey]: exportedAt };
     setExportedFuelSheets(nextExportedFuelSheets);
-    localStorage.setItem("titan-daily-fuel-sheet-export-history-v1", JSON.stringify(nextExportedFuelSheets));
+    writeSharedItem("titan-daily-fuel-sheet-export-history-v1", JSON.stringify(nextExportedFuelSheets));
     setMessage("Daily Fuel Sheet Excel export generated.");
   }
 
@@ -2830,6 +2832,7 @@ export function SystemSettings() {
         )}
       />
       {message && <p className="success-banner">{message}</p>}
+      <LocalBackupButton />
       <section className="original-panel">
         <div className="section-heading">
           <h3>Oil Variance / Difference Tolerance</h3>

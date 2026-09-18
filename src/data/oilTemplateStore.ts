@@ -1,3 +1,4 @@
+import { readSharedItem, writeSharedItem } from "../cloud/sharedStorage";
 export type OilTemplateCompartment = {
   id: string;
   compartment: string;
@@ -82,7 +83,7 @@ export const defaultOilTemplates: OilTemplate[] = [
 
 export function loadOilTemplates() {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = readSharedItem(STORAGE_KEY);
     return stored ? JSON.parse(stored) as OilTemplate[] : defaultOilTemplates;
   } catch {
     return defaultOilTemplates;
@@ -90,7 +91,7 @@ export function loadOilTemplates() {
 }
 
 export function saveOilTemplates(templates: OilTemplate[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(templates));
+  writeSharedItem(STORAGE_KEY, JSON.stringify(templates));
   window.dispatchEvent(new Event("titan-oil-templates-updated"));
 }
 

@@ -1,3 +1,4 @@
+import { readSharedItem, writeSharedItem } from "../cloud/sharedStorage";
 import { loadAssets, type EditableAsset } from "./assetStore";
 
 export type FuelShift = "Day Shift" | "Night Shift";
@@ -38,7 +39,7 @@ export function assetTypeAllowsOptionalWindow(assetType: string) {
 
 export function loadFuelSchedule() {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = readSharedItem(STORAGE_KEY);
     const entries = stored ? JSON.parse(stored) as FuelScheduleEntry[] : defaultFuelSchedule;
     return mergeAssetsIntoSchedule(entries.map(normaliseEntry));
   } catch {
@@ -47,7 +48,7 @@ export function loadFuelSchedule() {
 }
 
 export function saveFuelSchedule(entries: FuelScheduleEntry[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(entries.map(normaliseEntry)));
+  writeSharedItem(STORAGE_KEY, JSON.stringify(entries.map(normaliseEntry)));
   window.dispatchEvent(new Event("titan-fuel-schedule-updated"));
 }
 

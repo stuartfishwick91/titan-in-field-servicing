@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter, HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { App } from "./App";
+import { CloudGate } from "./cloud/CloudGate";
 import { BrandingProvider } from "./branding/BrandingContext";
 import "./styles.css";
 
@@ -13,7 +14,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <BrandingProvider>
       <Router>
         <Routes>
-          <Route path="/*" element={<App />} />
+          <Route path="/*" element={<CloudGate><App /></CloudGate>} />
           <Route path="*" element={<Navigate to="/management/dashboard" replace />} />
         </Routes>
       </Router>

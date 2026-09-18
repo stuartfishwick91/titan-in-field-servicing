@@ -1,3 +1,4 @@
+import { readSharedItem, writeSharedItem } from "../cloud/sharedStorage";
 export type BulkTankRecord = {
   id: string;
   productId: string;
@@ -21,7 +22,7 @@ export const defaultBulkTanks: BulkTankRecord[] = [
 
 export function loadBulkTanks() {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = readSharedItem(STORAGE_KEY);
     return stored ? (JSON.parse(stored) as BulkTankRecord[]).map(normaliseBulkTank) : defaultBulkTanks.map(normaliseBulkTank);
   } catch {
     return defaultBulkTanks.map(normaliseBulkTank);
@@ -29,7 +30,7 @@ export function loadBulkTanks() {
 }
 
 export function saveBulkTanks(tanks: BulkTankRecord[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(tanks.map(normaliseBulkTank)));
+  writeSharedItem(STORAGE_KEY, JSON.stringify(tanks.map(normaliseBulkTank)));
   window.dispatchEvent(new Event("titan-bulk-tanks-updated"));
 }
 

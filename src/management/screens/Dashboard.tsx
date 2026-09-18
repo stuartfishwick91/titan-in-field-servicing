@@ -7,6 +7,10 @@ import { buildLiveAlerts, liveAlertEvents, type LiveAlert } from "../../data/liv
 import { loadBulkTanks, productIdForName } from "../../data/bulkTankStore";
 import { levelAlertTone, loadSystemAlertSettings } from "../../data/systemSettingsStore";
 import { useNavigate } from "react-router-dom";
+import { loadFuelSubmissions } from "../../data/fuelSubmissionStore";
+import { loadServiceEntries } from "../../data/serviceEntryStore";
+import { loadCurrentUser } from "../../data/userAccessStore";
+import { calculateDashboardMetrics } from "../../data/dashboardMetrics";
 
 type GaugeItem = {
   name: string;
@@ -15,13 +19,6 @@ type GaugeItem = {
   capacity: number;
   tone: "green" | "yellow" | "blue" | "orange";
 };
-
-const submissions = [
-  { time: "09:12", employee: "Stuart Fishwick", asset: "Workshop Bay 1", activity: "Workshop Engine Oil Refill", litres: "240 L", status: "Submitted" },
-  { time: "08:47", employee: "Alicia Brown", asset: "Workshop Storage", activity: "Workshop Waste Oil Dip", litres: "380 L", status: "Submitted" },
-  { time: "08:18", employee: "Mark Chen", asset: "Workshop Bay 2", activity: "Workshop Coolant Top Up", litres: "60 L", status: "Submitted" },
-  { time: "07:51", employee: "Stuart Fishwick", asset: "Workshop Storage", activity: "Workshop Hydraulic Oil Refill", litres: "120 L", status: "Submitted" },
-];
 
 function litres(value: number) {
   return value.toLocaleString();
@@ -39,6 +36,11 @@ export function Dashboard() {
   const [bulkStorage, setBulkStorage] = useState<GaugeItem[]>(loadDashboardBulkStorage);
   const [liveAlerts, setLiveAlerts] = useState<LiveAlert[]>(buildLiveAlerts);
   const [showAlertDetails, setShowAlertDetails] = useState(false);
+  const [fuelEntries, setFuelEntries] = useState(loadFuelSubmissions);
+  const [serviceEntries, setServiceEntries] = useState(loadServiceEntries);
+  const currentUser = loadCurrentUser();
+  const metrics = calculateDashboardMetrics(fuelEntries, serviceEntries);
+  const workshopEntries = serviceEntries.filter((entry) => entry.oils.some((oil) => oil.source === "Workshop Storage"));
   const activeAlertCount = liveAlerts.length;
   const [selectedTruckId, setSelectedTruckId] = useState(trucks[0]?.truckId ?? "RD4830");
   const selectedTruck = trucks.find((truck) => truck.truckId === selectedTruckId) ?? trucks[0];
@@ -52,10 +54,15 @@ export function Dashboard() {
       setAlertSettings(loadSystemAlertSettings());
       setBulkStorage(loadDashboardBulkStorage());
       setLiveAlerts(buildLiveAlerts());
+      setFuelEntries(loadFuelSubmissions());
+      setServiceEntries(loadServiceEntries());
     };
-    liveAlertEvents.forEach((eventName) => window.addEventListener(eventName, refresh));
+    const events = [...liveAlertEvents, "titan-fuel-submissions-updated", "titan-service-entries-updated"];
+    events.forEach((eventName) => window.addEventListener(eventName, refresh));
+    const timer = window.setInterval(refresh, 60000);
     return () => {
-      liveAlertEvents.forEach((eventName) => window.removeEventListener(eventName, refresh));
+      events.forEach((eventName) => window.removeEventListener(eventName, refresh));
+      window.clearInterval(timer);
     };
   }, []);
 
@@ -67,16 +74,16 @@ export function Dashboard() {
           <p>Read-only executive overview of in-field servicing operations</p>
         </div>
         <div className="bulk-header-actions">
-          <button className="date-button" type="button">26 Jun 2026</button>
+          <span className="date-button">{new Date().toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" })}</span>
           <button className="icon-alert-button" type="button" onClick={() => setShowAlertDetails((current) => !current)} aria-expanded={showAlertDetails} aria-label="Show live alert details"><Bell size={18} /><span>{activeAlertCount}</span></button>
-          <div className="admin-card"><UserRound size={19} /><div><strong>Admin User</strong><span>Administrator</span></div></div>
+          <div className="admin-card"><UserRound size={19} /><div><strong>{currentUser?.fullName}</strong><span>{currentUser?.role}</span></div></div>
         </div>
       </header>
 
       <section className="executive-kpis">
-        <KpiCard icon={<Fuel size={22} />} label="Fuel Used Today" value="7,480 L" detail="Current shift" />
-        <KpiCard icon={<Droplets size={22} />} label="Oil Used Today" value="1,246 L" detail="Lubricants used" />
-        <KpiCard icon={<Truck size={22} />} label="Machines Fuelled" value="36 / 42" detail="Fuelled this shift" />
+        <KpiCard icon={<Fuel size={22} />} label="Fuel Used Today" value={`${litres(metrics.fuelLitres)} L`} detail="Recorded fuel entries today" />
+        <KpiCard icon={<Droplets size={22} />} label="Oil Used Today" value={`${litres(metrics.oilLitres)} L`} detail="Recorded service oils and coolant today" />
+        <KpiCard icon={<Truck size={22} />} label="Machines Fuelled" value={String(metrics.machinesFuelled)} detail="Distinct assets fuelled today" />
         <KpiCard icon={<AlertTriangle size={22} />} label="Active Alerts" value={activeAlertCount.toString()} detail="Click to view details" danger={activeAlertCount > 0} onClick={() => setShowAlertDetails((current) => !current)} />
       </section>
 
@@ -174,12 +181,12 @@ export function Dashboard() {
       </section>
 
       <section className="executive-panel">
-        <PanelTitle title="Recent Workshop Submissions" subtitle="Latest workshop-only submissions from employees" />
+        <PanelTitle title="Recent Workshop Service Entries" subtitle="Recorded service entries using workshop stock" />
         <div className="table-wrap">
           <table className="executive-table">
             <thead>
               <tr>
-                <th>Time</th>
+                <th>Date</th>
                 <th>Employee</th>
                 <th>Asset</th>
                 <th>Activity</th>
@@ -188,16 +195,17 @@ export function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {submissions.map((submission) => (
-                <tr key={`${submission.time}-${submission.asset}`}>
-                  <td>{submission.time}</td>
+              {workshopEntries.slice(0, 10).map((submission) => (
+                <tr key={submission.id}>
+                  <td>{submission.date}</td>
                   <td>{submission.employee}</td>
-                  <td>{submission.asset}</td>
-                  <td>{submission.activity}</td>
-                  <td>{submission.litres}</td>
-                  <td><span className="submission-status"><ClipboardCheck size={14} /> {submission.status}</span></td>
+                  <td>{submission.assetNumber}</td>
+                  <td>Workshop oil / coolant service</td>
+                  <td>{litres(submission.oils.filter((oil) => oil.source === "Workshop Storage").reduce((sum, oil) => sum + oil.litres, 0))} L</td>
+                  <td><span className="submission-status"><ClipboardCheck size={14} /> {submission.submitted ? "Submitted" : "Recorded"}</span></td>
                 </tr>
               ))}
+              {!workshopEntries.length && <tr><td colSpan={6}>No workshop service entries recorded yet.</td></tr>}
             </tbody>
           </table>
         </div>

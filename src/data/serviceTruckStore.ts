@@ -1,3 +1,4 @@
+import { readSharedItem, writeSharedItem } from "../cloud/sharedStorage";
 export type ServiceTruckOilGroup = {
   id?: string;
   productId?: string;
@@ -95,13 +96,10 @@ function normaliseServiceTrucks(trucks: ServiceTruckRecord[]) {
 
 export function loadServiceTrucks() {
   try {
-    const stored = localStorage.getItem(SERVICE_TRUCKS_STORAGE_KEY);
+    const stored = readSharedItem(SERVICE_TRUCKS_STORAGE_KEY);
     if (!stored) return defaultServiceTrucks;
     const parsed = JSON.parse(stored) as ServiceTruckRecord[];
     const normalised = normaliseServiceTrucks(parsed);
-    if (normalised.length !== parsed.length) {
-      localStorage.setItem(SERVICE_TRUCKS_STORAGE_KEY, JSON.stringify(normalised));
-    }
     return normalised;
   } catch {
     return defaultServiceTrucks;
@@ -109,6 +107,6 @@ export function loadServiceTrucks() {
 }
 
 export function saveServiceTrucks(trucks: ServiceTruckRecord[]) {
-  localStorage.setItem(SERVICE_TRUCKS_STORAGE_KEY, JSON.stringify(normaliseServiceTrucks(trucks)));
+  writeSharedItem(SERVICE_TRUCKS_STORAGE_KEY, JSON.stringify(normaliseServiceTrucks(trucks)));
   window.dispatchEvent(new Event("titan-service-trucks-updated"));
 }

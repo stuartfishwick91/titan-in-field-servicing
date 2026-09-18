@@ -1,3 +1,4 @@
+import { readSharedItem, writeSharedItem } from "../cloud/sharedStorage";
 import { productIdForName } from "./bulkTankStore";
 
 export type WorkshopStockRecord = {
@@ -30,7 +31,7 @@ function normaliseWorkshopStock(items: WorkshopStockRecord[]) {
 
 export function loadWorkshopStock() {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = readSharedItem(STORAGE_KEY);
     return stored ? normaliseWorkshopStock(JSON.parse(stored) as WorkshopStockRecord[]) : normaliseWorkshopStock(defaultWorkshopStock);
   } catch {
     return normaliseWorkshopStock(defaultWorkshopStock);
@@ -38,6 +39,6 @@ export function loadWorkshopStock() {
 }
 
 export function saveWorkshopStock(items: WorkshopStockRecord[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(normaliseWorkshopStock(items)));
+  writeSharedItem(STORAGE_KEY, JSON.stringify(normaliseWorkshopStock(items)));
   window.dispatchEvent(new Event("titan-workshop-stock-updated"));
 }

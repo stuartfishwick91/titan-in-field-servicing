@@ -2,12 +2,13 @@ import { AlertTriangle, ClipboardCheck, Eye, Fuel, Home, QrCode, Send, Truck, Wr
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { LoginScreen } from "../branding/LoginScreen";
+import { LocalBackupButton } from "../data/LocalBackupButton";
 import { useBranding } from "../branding/BrandingContext";
 import { loadFuelSubmissions, saveFuelSubmissions } from "../data/fuelSubmissionStore";
 import { loadServiceTrucks, saveServiceTrucks, type ServiceTruckOilGroup } from "../data/serviceTruckStore";
 import { loadBulkTanks, productIdForName, saveBulkTanks } from "../data/bulkTankStore";
 import { loadWorkshopStock, saveWorkshopStock } from "../data/workshopStore";
-import { clearCurrentUser, loadUsers, setCurrentUser, type ManagedUser } from "../data/userAccessStore";
+import { clearCurrentUser, loadCurrentUser, loadUsers, setCurrentUser, type ManagedUser } from "../data/userAccessStore";
 import { loadAssets, type EditableAsset } from "../data/assetStore";
 import { loadServiceEntries, saveServiceEntries, type ServiceEntryRecord } from "../data/serviceEntryStore";
 import { loadFuelSchedule, recordScheduledFuelUp, scheduleLabel, statusFromWindow, type FuelScheduleEntry } from "../data/fuelScheduleStore";
@@ -48,8 +49,8 @@ export function EmployeePortal() {
   const { branding } = useBranding();
 
   const navigate = useNavigate();
-  const [employee, setEmployee] = useState<string | null>(null);
-  const [employeeUser, setEmployeeUser] = useState<ManagedUser | null>(null);
+  const [employee, setEmployee] = useState<string | null>(() => loadCurrentUser()?.fullName ?? null);
+  const [employeeUser, setEmployeeUser] = useState<ManagedUser | null>(loadCurrentUser);
   const [error, setError] = useState("");
   const [tab, setTab] = useState<Tab>("home");
   const [notice, setNotice] = useState("");
@@ -100,14 +101,14 @@ export function EmployeePortal() {
       <section className="phone-surface">
         {notice && <p className="success-banner">{notice}</p>}
         {tab === "home" && employeeUser && <HomeTab employee={employee} user={employeeUser} onNotice={setNotice} />}
-        {tab === "service" && <ServiceEntryTab onSubmit={() => setNotice("Service entry submitted to the shift sheet.")} />}
+        {tab === "service" && <ServiceEntryTab employee={employee} onSubmit={() => setNotice("Service entry submitted to the shift sheet.")} />}
         {tab === "refills" && <RefillsTab onSubmit={() => setNotice("Service truck refill recorded successfully.")} />}
         {tab === "fuelSchedule" && employeeUser && (
           hasFuelScheduleAccess(employeeUser)
             ? <EmployeeFuelScheduleTab user={employeeUser} />
             : <AccessDeniedTab />
         )}
-        {tab === "daily" && <DailySheetTab onSend={() => setNotice("Daily fuel ups submitted successfully")} />}
+        {tab === "daily" && <DailySheetTab employee={employee} onSend={() => setNotice("Daily fuel ups submitted successfully")} />}
       </section>
       <nav className="bottom-tabs" aria-label="Employee navigation">
         {tabsForUser(employeeUser).map((item) => {
@@ -181,17 +182,18 @@ function HomeTab({
 
   return (
     <div className="employee-tab employee-home">
-      <p className="eyebrow">Day shift - Workshop and Pit 3</p>
+      <p className="eyebrow">{currentFuelShift()} — Presentation trial</p>
       <h2>Welcome, {employee.split(" ")[0]}</h2>
+      <LocalBackupButton />
       <section className="employee-home-card supervisor-card">
         <div className="employee-card-head">
           <div>
-            <strong>Fuel Farm Notice</strong>
-            <span>Today 06:15</span>
+            <strong>Example Notice</strong>
+            <span>Presentation sample</span>
           </div>
           <em className={messageRead ? "priority-badge acknowledged" : "priority-badge warning"}>{messageRead ? "Acknowledged" : "Warning"}</em>
         </div>
-        <p>Fuel Farm 2 is offline today. Use Fuel Farm 1 for all diesel refills until further notice.</p>
+        <p>Example only: a supervisor notice would appear here. Live supervisor messaging is not enabled in this trial.</p>
         {!messageRead && <button className="secondary-button" type="button" onClick={markMessageRead}>Mark as Read</button>}
       </section>
 
@@ -255,7 +257,6 @@ function HomeTab({
         <div className="shift-status-grid">
           <article><span>Fuel Entries</span><strong>{employeeFuelEntries.length}</strong></article>
           <article><span>Service Entries</span><strong>{serviceEntries.length}</strong></article>
-          <article><span>Refills</span><strong>1</strong></article>
           <article><span>Daily Fuel Ups</span><strong>{dailySubmitted ? "Submitted" : "Not Submitted"}</strong></article>
         </div>
         {submittedAt && <span>Submitted at: {submittedAt}</span>}
@@ -465,8 +466,7 @@ const lastSmuByAsset: Record<string, number> = {
   GR1412: 6438,
 };
 
-function ServiceEntryTab({ onSubmit }: { onSubmit: () => void }) {
-  const employee = "Stuart Fishwick";
+function ServiceEntryTab({ employee, onSubmit }: { employee: string; onSubmit: () => void }) {
   const [assets, setAssets] = useState(loadAssets);
   const [trucks, setTrucks] = useState(loadServiceTrucks);
   const [manualAsset, setManualAsset] = useState("");
@@ -561,6 +561,13 @@ function ServiceEntryTab({ onSubmit }: { onSubmit: () => void }) {
   }
 
   function deductAssignedTruckFuel(litres: number) {
+    if (fuelSource === "Fuel Farm" && litres > 0) {
+      saveBulkTanks(loadBulkTanks().map((tank) => tank.productId === "diesel" ? {
+        ...tank, currentLitres: tank.currentLitres - litres,
+        expectedLitres: (tank.expectedLitres ?? tank.currentLitres) - litres,
+      } : tank));
+      return;
+    }
     if (!assignedTruck || litres <= 0 || fuelSource !== "Assigned Service Truck") return;
     const latestTrucks = loadServiceTrucks();
     const currentAssignedTruckId = localStorage.getItem("titan-employee-assigned-truck") ?? assignedTruck.truckId;
@@ -582,7 +589,7 @@ function ServiceEntryTab({ onSubmit }: { onSubmit: () => void }) {
     if (!assignedTruck) return;
     const serviceTruckEntries = entries.filter((entry) => entry.source === "Service Truck Storage" && entry.litres > 0);
     if (!serviceTruckEntries.length) return;
-    const updated = trucks.map((truck) => {
+    const updated = loadServiceTrucks().map((truck) => {
       if (truck.truckId !== assignedTruck.truckId) return truck;
       return {
         ...truck,
@@ -630,12 +637,20 @@ function ServiceEntryTab({ onSubmit }: { onSubmit: () => void }) {
       alert("Load an asset before submitting service entry.");
       return;
     }
-    if (!currentSmu || Number.isNaN(smuNumber)) {
+    if (!currentSmu || !Number.isFinite(smuNumber) || smuNumber < 0) {
       alert("Current SMU is required and must be a number.");
       return;
     }
     const fuelLitres = Number(fuelAdded || 0);
+    if (!Number.isFinite(fuelLitres) || fuelLitres < 0) {
+      alert("Fuel litres must be a finite, non-negative number.");
+      return;
+    }
+    if (Object.values(oilDraft).some((draft) => !Number.isFinite(draft.litres) || draft.litres < 0)) {
+      alert("Oil litres must be finite, non-negative numbers."); return;
+    }
     const oilEntries = loadedAsset.oilConfiguration
+      .filter((oil) => oil.active)
       .map((oil) => ({ oil, draft: oilDraft[oil.id] }))
       .filter(({ draft }) => draft?.litres && draft.litres > 0);
     if (fuelLitres <= 0 && !oilEntries.length) {
@@ -646,9 +661,29 @@ function ServiceEntryTab({ onSubmit }: { onSubmit: () => void }) {
       ? assignedTruck?.truckId ?? assignedTruckId ?? fuelSource
       : fuelSource;
 
+    const required = new Map<string, { source: string; product: string; litres: number }>();
+    const requireStock = (source: string, product: string, litres: number) => {
+      const key = `${source}:${product}`;
+      required.set(key, { source, product, litres: (required.get(key)?.litres ?? 0) + litres });
+    };
+    if (fuelLitres > 0 && fuelSource !== "Other") requireStock(fuelSource === "Fuel Farm" ? "Bulk Storage" : "Service Truck Storage", "diesel", fuelLitres);
+    for (const { oil, draft } of oilEntries) requireStock(oilSource, productIdForName(oil.product), draft.litres);
+    for (const request of required.values()) {
+      const matches = request.source === "Bulk Storage"
+        ? loadBulkTanks().filter(item => item.productId === request.product).map(item => item.currentLitres)
+        : request.source === "Workshop Storage"
+          ? loadWorkshopStock().filter(item => item.productId === request.product).map(item => item.current)
+          : (loadServiceTrucks().find(item => item.truckId === assignedTruck?.truckId)?.oilGroups ?? [])
+            .filter(item => (item.productId ?? productIdForName(item.name)) === request.product).map(item => item.current);
+      if (matches.length !== 1 || matches[0] < request.litres) {
+        alert(`Check ${request.product} in ${request.source}: one matching compartment with enough stock is required.`);
+        return;
+      }
+    }
+
     const serviceEntry: ServiceEntryRecord = {
       id: `service-${Date.now()}`,
-      date: new Date().toLocaleDateString(),
+      date: currentReportDate(),
       employee,
       assetNumber: loadedAsset.assetNumber,
       make: loadedAsset.make,
@@ -687,7 +722,7 @@ function ServiceEntryTab({ onSubmit }: { onSubmit: () => void }) {
         },
         ...fuelEntries,
       ]);
-      recordScheduledFuelUp(loadedAsset.assetNumber, fuelLitres, employee, resolvedFuelSource, "Day Shift", smuNumber);
+      recordScheduledFuelUp(loadedAsset.assetNumber, fuelLitres, employee, resolvedFuelSource, currentFuelShift(), smuNumber);
       deductAssignedTruckFuel(fuelLitres);
     }
     deductAssignedTruckOils(serviceEntry.oils);
@@ -875,7 +910,7 @@ function RefillsTab({ onSubmit }: { onSubmit: () => void }) {
       return;
     }
     const overfills = entries.filter(({ group, refill }) => group.current + refill.litres > group.capacity);
-    if (overfills.length && !confirm("One or more refills exceed compartment capacity. Continue with override?")) return;
+    if (overfills.length) { alert("The refill exceeds compartment capacity. Reduce the litres before saving."); return; }
 
     if (targetType === "Service Truck" && selectedTruck) {
       const updated = trucks.map((truck) => {
@@ -893,9 +928,7 @@ function RefillsTab({ onSubmit }: { onSubmit: () => void }) {
       setTrucks(updated);
       saveServiceTrucks(updated);
     } else {
-      setWorkshopLevels((items) =>
-        {
-          const nextWorkshopLevels = items.map((group) => {
+          const nextWorkshopLevels = workshopLevels.map((group) => {
           const refill = draft[group.name];
           if (!refill?.litres) return group;
           const current = Math.min(group.capacity, group.current + refill.litres);
@@ -911,9 +944,7 @@ function RefillsTab({ onSubmit }: { onSubmit: () => void }) {
             capacity: group.capacity,
             tone: group.tone === "green" ? "green" : "yellow",
           })));
-          return nextWorkshopLevels;
-        },
-      );
+          setWorkshopLevels(nextWorkshopLevels);
     }
 
     const updatedBulkTanks = bulkTanks.map((tank) => {
@@ -973,8 +1004,7 @@ function RefillsTab({ onSubmit }: { onSubmit: () => void }) {
   );
 }
 
-function DailySheetTab({ onSend }: { onSend: () => void }) {
-  const employee = "Stuart Fishwick";
+function DailySheetTab({ employee, onSend }: { employee: string; onSend: () => void }) {
   const [entries, setEntries] = useState(loadFuelSubmissions);
   const [serviceEntries, setServiceEntryState] = useState(loadServiceEntries);
   const [assets, setAssets] = useState(loadAssets);

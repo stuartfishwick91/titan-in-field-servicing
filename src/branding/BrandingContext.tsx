@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { readSharedItem, writeSharedItem } from "../cloud/sharedStorage";
 
 export type BrandingSettings = {
   companyName: string;
@@ -38,7 +39,7 @@ const BrandingContext = createContext<BrandingContextValue | null>(null);
 
 function loadStoredBranding() {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = readSharedItem(STORAGE_KEY);
     return stored ? { ...defaultBranding, ...JSON.parse(stored) } as BrandingSettings : defaultBranding;
   } catch {
     return defaultBranding;
@@ -47,6 +48,12 @@ function loadStoredBranding() {
 
 export function BrandingProvider({ children }: { children: ReactNode }) {
   const [branding, setBrandingState] = useState<BrandingSettings>(loadStoredBranding);
+
+  useEffect(() => {
+    const refresh = () => setBrandingState(loadStoredBranding());
+    window.addEventListener("storage", refresh);
+    return () => window.removeEventListener("storage", refresh);
+  }, []);
 
   useEffect(() => {
     document.documentElement.style.setProperty("--yellow", branding.primaryColour);
@@ -58,11 +65,11 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
     branding,
     setBranding: (settings) => {
       setBrandingState(settings);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+      writeSharedItem(STORAGE_KEY, JSON.stringify(settings));
     },
     resetBranding: () => {
       setBrandingState(defaultBranding);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultBranding));
+      writeSharedItem(STORAGE_KEY, JSON.stringify(defaultBranding));
     },
   }), [branding]);
 

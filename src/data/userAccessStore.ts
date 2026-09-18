@@ -1,3 +1,4 @@
+import { cloudIdentity } from "../cloud/identity";
 export type UserRole = "Administrator" | "Supervisor" | "Employee";
 export type EmployeePortalRole = "Serviceperson" | "Fuel Operator" | "Fitter" | "Supervisor" | "Admin" | "Employee";
 export type UserStatus = "Active" | "Inactive" | "On Leave";
@@ -136,14 +137,7 @@ export function saveUsers(users: ManagedUser[]) {
 }
 
 export function loadCurrentUser() {
-  try {
-    const stored = localStorage.getItem(CURRENT_USER_STORAGE_KEY);
-    if (!stored) return null;
-    const parsed = normaliseUser(JSON.parse(stored) as ManagedUser);
-    return parsed.role === "Employee" ? parsed : { ...defaultUsers[0], ...parsed };
-  } catch {
-    return null;
-  }
+  return cloudIdentity();
 }
 
 function normaliseUser(user: ManagedUser): ManagedUser {
@@ -172,6 +166,7 @@ export function setCurrentUser(user: ManagedUser) {
 
 export function clearCurrentUser() {
   localStorage.removeItem(CURRENT_USER_STORAGE_KEY);
+  window.dispatchEvent(new Event("titan-cloud-signout"));
   window.dispatchEvent(new Event("titan-current-user-updated"));
 }
 

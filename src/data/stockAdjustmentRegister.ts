@@ -1,3 +1,4 @@
+import { readSharedItem, writeSharedItem } from "../cloud/sharedStorage";
 export type StockAdjustmentArea = "Bulk Storage" | "Workshop Storage";
 
 export type StockAdjustmentRegisterEntry = {
@@ -16,7 +17,7 @@ const STORAGE_KEY = "titan-stock-adjustment-register-v1";
 
 export function loadStockAdjustmentRegister() {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = readSharedItem(STORAGE_KEY);
     return stored ? JSON.parse(stored) as StockAdjustmentRegisterEntry[] : [];
   } catch {
     return [];
@@ -24,7 +25,7 @@ export function loadStockAdjustmentRegister() {
 }
 
 export function saveStockAdjustmentRegister(entries: StockAdjustmentRegisterEntry[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+  writeSharedItem(STORAGE_KEY, JSON.stringify(entries));
   window.dispatchEvent(new Event("titan-stock-adjustment-register-updated"));
 }
 

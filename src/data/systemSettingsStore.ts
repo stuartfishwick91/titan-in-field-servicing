@@ -1,3 +1,4 @@
+import { readSharedItem, writeSharedItem } from "../cloud/sharedStorage";
 export type ToleranceMode = "litres" | "percentage";
 
 export type SystemAlertSettings = {
@@ -46,7 +47,7 @@ export const defaultSystemAlertSettings: SystemAlertSettings = {
 
 export function loadSystemAlertSettings() {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = readSharedItem(STORAGE_KEY);
     return stored ? { ...defaultSystemAlertSettings, ...JSON.parse(stored) } as SystemAlertSettings : defaultSystemAlertSettings;
   } catch {
     return defaultSystemAlertSettings;
@@ -54,12 +55,12 @@ export function loadSystemAlertSettings() {
 }
 
 export function saveSystemAlertSettings(settings: SystemAlertSettings) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  writeSharedItem(STORAGE_KEY, JSON.stringify(settings));
   window.dispatchEvent(new Event("titan-system-settings-updated"));
 }
 
 export function resetSystemAlertSettings() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultSystemAlertSettings));
+  writeSharedItem(STORAGE_KEY, JSON.stringify(defaultSystemAlertSettings));
   window.dispatchEvent(new Event("titan-system-settings-updated"));
 }
 

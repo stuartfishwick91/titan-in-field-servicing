@@ -1,3 +1,4 @@
+import { readSharedItem, writeSharedItem } from "../cloud/sharedStorage";
 export type AssetOilConfiguration = {
   id: string;
   compartment: string;
@@ -80,7 +81,7 @@ function normaliseAsset(asset: EditableAsset): EditableAsset {
 
 export function loadAssets() {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = readSharedItem(STORAGE_KEY);
     return stored ? (JSON.parse(stored) as EditableAsset[]).map(normaliseAsset) : defaultEditableAssets;
   } catch {
     return defaultEditableAssets;
@@ -88,6 +89,6 @@ export function loadAssets() {
 }
 
 export function saveAssets(assets: EditableAsset[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(assets));
+  writeSharedItem(STORAGE_KEY, JSON.stringify(assets));
   window.dispatchEvent(new Event("titan-assets-updated"));
 }

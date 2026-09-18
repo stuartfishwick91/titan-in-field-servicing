@@ -1,3 +1,4 @@
+import { readSharedItem, writeSharedItem } from "../cloud/sharedStorage";
 export type ServiceOilEntry = {
   compartment: string;
   product: string;
@@ -27,7 +28,7 @@ const STORAGE_KEY = "titan-service-entries-v1";
 
 export function loadServiceEntries() {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = readSharedItem(STORAGE_KEY);
     return stored ? JSON.parse(stored) as ServiceEntryRecord[] : [];
   } catch {
     return [];
@@ -35,6 +36,6 @@ export function loadServiceEntries() {
 }
 
 export function saveServiceEntries(entries: ServiceEntryRecord[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+  writeSharedItem(STORAGE_KEY, JSON.stringify(entries));
   window.dispatchEvent(new Event("titan-service-entries-updated"));
 }

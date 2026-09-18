@@ -3721,7 +3721,7 @@ th {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-content: start;
   }
-  .employee-home > :is(h2, p, .supervisor-card, .employee-modal-panel) { grid-column: 1 / -1; }
+  .employee-home > :is(h2, p, .supervisor-card, .employee-modal-panel, .local-backup-control) { grid-column: 1 / -1; }
 }
 
 @media (max-height: 800px) {
@@ -3735,6 +3735,23 @@ th {
   .titan-login-divider { margin-block: 8px; }
   .titan-login-footer { margin-top: 18px; }
 }
+
+.cloud-status {
+  position: fixed; inset: 0 0 auto; z-index: 1500;
+  height: calc(44px + env(safe-area-inset-top)); padding: env(safe-area-inset-top) 12px 0;
+  display: flex; align-items: center; gap: 12px;
+  color: #f3f4f6; background: #17232e; border-bottom: 1px solid #52606c;
+  font-size: 12px;
+}
+.cloud-status span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cloud-status a { color: #ffc20e; }
+.cloud-blocked .success-banner { display: none; }
+.cloud-status + div { padding-top: calc(44px + env(safe-area-inset-top)); }
+.cloud-status + div .employee-shell { top: calc(44px + env(safe-area-inset-top)); height: calc(100dvh - 44px - env(safe-area-inset-top)); }
+.cloud-setup { max-width: 700px; margin: 8vh auto; padding: 24px; }
+.cloud-setup button, .cloud-overlay button { padding: 12px 16px; margin: 8px 8px 8px 0; background: #ffc20e; color: #101820; border: 0; border-radius: 6px; cursor: pointer; }
+.cloud-overlay { position: fixed; inset: 0; z-index: 2500; background: #000b; display: grid; place-items: center; padding: 16px; }
+.cloud-overlay section { background: #17232e; color: #fff; padding: 24px; border: 1px solid #ffc20e; border-radius: 12px; max-width: 600px; max-height: 90dvh; overflow: auto; }
 
 @media (max-height: 500px) {
   .employee-header { padding-block: max(6px, env(safe-area-inset-top)) 6px; }
