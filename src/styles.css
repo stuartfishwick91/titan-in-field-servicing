@@ -2128,10 +2128,13 @@ th {
 
 .employee-shell {
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   max-width: 520px;
+  height: 100vh;
+  height: 100dvh;
   min-height: 100vh;
   margin: 0 auto;
+  overflow: hidden;
   background: #0b0d10;
 }
 
@@ -2157,7 +2160,9 @@ th {
 .phone-surface {
   margin: 14px;
   padding: 18px;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .employee-tab {
@@ -2214,9 +2219,13 @@ th {
 }
 
 .bottom-tabs {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
   border-top: 1px solid var(--line);
+  background: #0d0f12;
 }
 
 .bottom-tabs button {
