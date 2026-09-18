@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { LoginScreen } from "../branding/LoginScreen";
 import { LocalBackupButton } from "../data/LocalBackupButton";
+import { FuelFarmEntryTab } from "./FuelFarmEntryTab";
 import { useBranding } from "../branding/BrandingContext";
 import { loadFuelSubmissions, saveFuelSubmissions } from "../data/fuelSubmissionStore";
 import { loadServiceTrucks, saveServiceTrucks, type ServiceTruckOilGroup } from "../data/serviceTruckStore";
@@ -14,11 +15,12 @@ import { loadServiceEntries, saveServiceEntries, type ServiceEntryRecord } from 
 import { loadFuelSchedule, recordScheduledFuelUp, scheduleLabel, statusFromWindow, type FuelScheduleEntry } from "../data/fuelScheduleStore";
 import { loadSystemAlertSettings } from "../data/systemSettingsStore";
 
-type Tab = "home" | "service" | "refills" | "fuelSchedule" | "daily";
+type Tab = "home" | "service" | "refills" | "fuelSchedule" | "daily" | "fuelFarm";
 
 const baseTabs: Array<{ id: Tab; label: string; icon: typeof Home }> = [
   { id: "home", label: "Home", icon: Home },
   { id: "service", label: "Service Entry", icon: Wrench },
+  { id: "fuelFarm", label: "Fuel Farm", icon: Fuel },
   { id: "refills", label: "Refills", icon: Fuel },
   { id: "daily", label: "Daily Sheet", icon: ClipboardCheck },
 ];
@@ -30,9 +32,9 @@ function hasFuelScheduleAccess(user: ManagedUser | null) {
 function tabsForUser(user: ManagedUser | null) {
   if (!hasFuelScheduleAccess(user)) return baseTabs;
   return [
-    ...baseTabs.slice(0, 3),
+    ...baseTabs.slice(0, -1),
     { id: "fuelSchedule" as Tab, label: "Fuel Schedule", icon: Truck },
-    baseTabs[3],
+    baseTabs[baseTabs.length - 1],
   ];
 }
 
@@ -102,6 +104,7 @@ export function EmployeePortal() {
         {notice && <p className="success-banner">{notice}</p>}
         {tab === "home" && employeeUser && <HomeTab employee={employee} user={employeeUser} onNotice={setNotice} />}
         {tab === "service" && <ServiceEntryTab employee={employee} onSubmit={() => setNotice("Service entry submitted to the shift sheet.")} />}
+        {tab === "fuelFarm" && <FuelFarmEntryTab employee={employee} />}
         {tab === "refills" && <RefillsTab onSubmit={() => setNotice("Service truck refill recorded successfully.")} />}
         {tab === "fuelSchedule" && employeeUser && (
           hasFuelScheduleAccess(employeeUser)
