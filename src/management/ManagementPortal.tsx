@@ -41,6 +41,7 @@ const navGroups = [
     items: [
       { to: "/management/bulk-storage", label: "Bulk Storage", icon: Droplets },
       { to: "/management/workshop-storage", label: "Workshop Storage", icon: Wrench },
+      { to: "/management/field-storage", label: "Field Storage", icon: Droplets },
       { to: "/management/service-trucks", label: "Service Trucks", icon: Truck },
       { to: "/management/live-fuel-status", label: "Live Fuel Status", icon: Fuel },
     ],
@@ -70,6 +71,7 @@ export function ManagementPortal() {
   const usesOriginalHeader =
     location.pathname === "/management/dashboard" ||
     location.pathname === "/management/bulk-storage" ||
+    location.pathname === "/management/field-storage" ||
     location.pathname === "/management/service-trucks";
 
   const portalOverlay = branding.portalBackground
@@ -155,7 +157,8 @@ export function ManagementPortal() {
             <>
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="live-fuel-status" element={<LiveFuelStatus />} />
-              <Route path="bulk-storage" element={<SiteOilStorage />} />
+              <Route path="bulk-storage" element={<SiteOilStorage key="site" />} />
+              <Route path="field-storage" element={<SiteOilStorage key="field" initialDepartment="Field" />} />
               <Route path="bulk-tanks" element={<BulkStorage />} />
               <Route path="workshop-storage" element={<WorkshopStorage />} />
               <Route path="service-trucks" element={<ServiceTrucks />} />

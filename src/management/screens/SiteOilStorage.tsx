@@ -24,8 +24,8 @@ function StorageCard({ name, location, current, capacity, expected, shortage, su
   </article>;
 }
 
-export function SiteOilStorage() {
-  const [department, setDepartment] = useState<Department | "Site total">("Site total");
+export function SiteOilStorage({ initialDepartment = "Site total" }: { initialDepartment?: Department | "Site total" }) {
+  const [department, setDepartment] = useState<Department | "Site total">(initialDepartment);
   const [rows, setRows] = useState(loadSiteStock);
   const [history, setHistory] = useState(loadStockAudit);
   const [error, setError] = useState("");
@@ -77,7 +77,7 @@ export function SiteOilStorage() {
   }
 
   return <section className="site-oil-page">
-    <h1>Site Oil Storage</h1>
+    <h1>{initialDepartment === "Field" ? "Field Storage" : "Site Oil Storage"}</h1>
     <p>Linked stock across departments. Internal transfers preserve the site total; equipment usage reduces it. A dip changes recorded stock while expected stock remains available for comparison.</p>
     <div className="site-stock-tabs" role="tablist" aria-label="Storage departments">
       {(["Site total", ...departments] as const).map(item => <button key={item} type="button" role="tab" aria-selected={department === item} onClick={() => { setDepartment(item); setEditingId(null); setName(""); setOpening("0"); }}>{item === "Field" ? "Field Stock" : item}</button>)}
