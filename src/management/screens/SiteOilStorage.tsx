@@ -1,10 +1,27 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type CSSProperties, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { applyStockOperation, departments, summarizeSiteStock, movementKind, type Department, type StockOperation } from "../../data/siteInventoryModel";
 import { loadFacilities, loadSiteStock, loadStockAudit, saveFacilities, saveSiteStock } from "../../data/siteInventory";
 
 const litresText = (value: number) => `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })} L`;
 const productName = (value: string) => ({ "engine-15w40": "Engine Oil 15W-40", "hydraulic-46": "Hydraulic Oil 46", "hydraulic-32": "Hydraulic Oil 32", transmission: "Transmission Oil", diesel: "Diesel", coolant: "Coolant", "waste-oil": "Waste Oil" }[value] ?? value);
+
+function StorageCard({ name, location, current, capacity, expected, shortage, surplus }: { name: string; location: string; current: number; capacity: number; expected: number; shortage: number; surplus: number }) {
+  const percent = capacity > 0 ? current / capacity * 100 : null;
+  return <article className="bulk-level-card site-storage-card">
+    <span className="site-storage-location">{location}</span><h3>{name}</h3>
+    <div className="large-ring green" role="img" aria-label={`${name}: ${percent === null ? "capacity not set" : `${percent.toFixed(1)} percent full`}`} style={{ "--level": `${Math.min(100, Math.max(0, percent ?? 0))}%` } as CSSProperties}>
+      <div><strong>{percent === null ? "—" : `${Math.round(percent)}%`}</strong><span>Full</span></div>
+    </div>
+    <b>{litresText(current)} / {litresText(capacity)}</b>
+    <span className="site-storage-location">Recorded stock / capacity</span>
+    <dl className="site-storage-balances">
+      <div><dt>Expected</dt><dd>{litresText(expected)}</dd></div>
+      <div className={shortage > 0 ? "site-storage-shortage" : ""}><dt>Shortage</dt><dd>{litresText(shortage)}</dd></div>
+      <div><dt>Surplus</dt><dd>{litresText(surplus)}</dd></div>
+    </dl>
+  </article>;
+}
 
 export function SiteOilStorage() {
   const [department, setDepartment] = useState<Department | "Site total">("Site total");
@@ -63,14 +80,25 @@ export function SiteOilStorage() {
     {message && <p className="success-banner">{message}</p>}
     <h2>{department} — product totals</h2>
     <p>Shortages and surpluses are shown separately; they are not cancelled against another location. Stock figures include recorded movements since the last physical count, not live tank sensor readings.</p>
+    <div className="site-storage-grid">
+      {totals.map(row => <StorageCard key={row.productId} name={productName(row.productId)} location={`${department} · combined storage`} {...row} capacity={visible.filter(item => item.productId === row.productId).reduce((sum, item) => sum + item.capacity, 0)} />)}
+    </div>
+    {!totals.length && <p>No compartments configured for this view. Add a compartment below to see its storage level.</p>}
+    <details className="site-storage-details"><summary>View product totals as a table</summary>
     <div className="site-stock-table"><table><thead><tr><th>Product</th><th>Recorded stock</th><th>Expected stock</th><th>Shortage</th><th>Surplus</th></tr></thead><tbody>
       {totals.map(row => <tr key={row.productId}><td>{productName(row.productId)}</td><td>{litresText(row.current)}</td><td>{litresText(row.expected)}</td><td>{litresText(row.shortage)}</td><td>{litresText(row.surplus)}</td></tr>)}
       {!totals.length && <tr><td colSpan={5}>No compartments configured for this view.</td></tr>}
     </tbody></table></div>
+    </details>
     <h2>Department compartments</h2>
+    <div className="site-storage-grid">
+      {visible.map(row => <StorageCard key={row.key} name={row.name} location={`${row.department} · ${productName(row.productId)}`} current={row.current} capacity={row.capacity} expected={row.expected} shortage={Math.max(0, row.expected - row.current)} surplus={Math.max(0, row.current - row.expected)} />)}
+    </div>
+    <details className="site-storage-details"><summary>View compartment details as a table</summary>
     <div className="site-stock-table"><table><thead><tr><th>Department / location</th><th>Product</th><th>Stock</th><th>Expected</th><th>Difference (stock − expected)</th></tr></thead><tbody>
       {visible.map(row => <tr key={row.key}><td>{row.department} / {row.name}</td><td>{productName(row.productId)}</td><td>{litresText(row.current)}</td><td>{litresText(row.expected)}</td><td>{litresText(row.current - row.expected)}</td></tr>)}
     </tbody></table></div>
+    </details>
     <p><Link to="/management/bulk-tanks">Manage bulk compartments</Link> · <Link to="/management/workshop-storage">Manage workshop compartments</Link> · <Link to="/management/service-trucks">Manage service trucks</Link></p>
     <section className="original-panel"><h2>Record stock movement</h2>
       <form onSubmit={submit} className="settings-grid">

@@ -3765,3 +3765,15 @@ th {
   .employee-header h1 { font-size: 18px; }
   .bottom-tabs button { min-height: 48px; gap: 2px; padding-block: 4px; }
 }
+
+.site-storage-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 16px; margin: 18px 0; }
+.site-storage-card { align-content: start; gap: 12px; padding: 20px 16px; min-width: 0; }
+.site-storage-card h3 { margin: 0; min-height: 40px; font-size: 16px; text-align: center; overflow-wrap: anywhere; }
+.site-storage-location { color: var(--muted); font-size: 12px; text-align: center; }
+.site-storage-card > b { text-align: center; font-size: 16px; }
+.site-storage-balances { width: 100%; margin: 4px 0 0; border-top: 1px solid #2b333f; padding-top: 10px; font-size: 13px; }
+.site-storage-balances > div { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; }
+.site-storage-balances dd { margin: 0; font-weight: 700; }
+.site-storage-shortage { color: #ffbd66; }
+.site-storage-details { margin: 14px 0 24px; }
+.site-storage-details summary { cursor: pointer; color: var(--yellow); padding: 10px 0; }
