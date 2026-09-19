@@ -4,7 +4,8 @@ export type ServiceOilEntry = {
   product: string;
   capacity: number;
   litres: number;
-  source: "Workshop Storage" | "Service Truck Storage" | "Bulk Storage";
+  source: "Workshop Storage" | "Service Truck Storage" | "Bulk Storage" | "Field Storage";
+  sourceLocation?: string;
   comments: string;
 };
 

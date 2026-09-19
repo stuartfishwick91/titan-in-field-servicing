@@ -8,7 +8,7 @@ import { loadFuelSubmissions, saveFuelSubmissions } from "../data/fuelSubmission
 import { loadFuelSchedule, saveFuelSchedule, type FuelShift } from "../data/fuelScheduleStore";
 import { prepareFuelFarmEntry } from "../data/fuelFarmEntry";
 
-export function FuelFarmEntryTab({ employee }: { employee: string }) {
+export function FuelFarmEntryTab({ employee, onSaved }: { employee: string; onSaved?: () => void }) {
   const [assetNumber, setAssetNumber] = useState("");
   const [scanning, setScanning] = useState(false);
   const [litres, setLitres] = useState("");
@@ -34,7 +34,7 @@ export function FuelFarmEntryTab({ employee }: { employee: string }) {
       saveFuelSubmissions(next.fuel);
       saveFuelSchedule(next.schedule);
       saveBulkTanks(next.tanks);
-      setLitres(""); setSmu(""); setRecorded(true);
+      setLitres(""); setSmu(""); setRecorded(true); onSaved?.();
     } catch (e) { setError(e instanceof Error ? e.message : "Could not record this fuel-up."); }
   }
 

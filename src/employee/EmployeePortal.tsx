@@ -1,7 +1,8 @@
-import { loadSiteStock, saveSiteStock } from "../data/siteInventory";
+import { workAreas, workAreaTabs, areaOilSource, prepareAreaUsage, type WorkArea } from "../data/employeeWorkArea";
+import { loadFacilities, loadSiteStock, saveSiteStock } from "../data/siteInventory";
 import { applyStockOperation } from "../data/siteInventoryModel";
 import { AlertTriangle, ClipboardCheck, Eye, Fuel, Home, QrCode, Send, Truck, Wrench } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { LoginScreen } from "../branding/LoginScreen";
 import { LocalBackupButton } from "../data/LocalBackupButton";
@@ -24,7 +25,7 @@ type Tab = "home" | "service" | "refills" | "fuelSchedule" | "daily" | "fuelFarm
 const baseTabs: Array<{ id: Tab; label: string; icon: typeof Home }> = [
   { id: "home", label: "Home", icon: Home },
   { id: "service", label: "Service Entry", icon: Wrench },
-  { id: "fuelFarm", label: "Fuel Farm", icon: Fuel },
+  { id: "fuelFarm", label: "Fuel Entry", icon: Fuel },
   { id: "refills", label: "Refills", icon: Fuel },
   { id: "daily", label: "Daily Sheet", icon: ClipboardCheck },
 ];
@@ -33,13 +34,9 @@ function hasFuelScheduleAccess(user: ManagedUser | null) {
   return user?.employeeRole === "Serviceperson" || user?.employeeRole === "Fuel Operator";
 }
 
-function tabsForUser(user: ManagedUser | null) {
-  if (!hasFuelScheduleAccess(user)) return baseTabs;
-  return [
-    ...baseTabs.slice(0, -1),
-    { id: "fuelSchedule" as Tab, label: "Fuel Schedule", icon: Truck },
-    baseTabs[baseTabs.length - 1],
-  ];
+function tabsForUser(user: ManagedUser | null, area: WorkArea) {
+  const available = [...baseTabs, { id: "fuelSchedule" as Tab, label: "Fuel Schedule", icon: Truck }];
+  return workAreaTabs(area, hasFuelScheduleAccess(user)).map(id => available.find(item => item.id === id)!);
 }
 
 function currentFuelShift() {
@@ -60,6 +57,19 @@ export function EmployeePortal() {
   const [error, setError] = useState("");
   const [tab, setTab] = useState<Tab>("home");
   const [notice, setNotice] = useState("");
+  const [workArea, setWorkArea] = useState<WorkArea>(() => { const saved = localStorage.getItem("titan-employee-work-area"); return workAreas.includes(saved as WorkArea) ? saved as WorkArea : "Service Truck"; });
+  const dirty = useRef(false);
+  useEffect(() => { const mark = () => { dirty.current = true; }; window.addEventListener("titan-cloud-form-edited", mark); return () => window.removeEventListener("titan-cloud-form-edited", mark); }, []);
+  function changeTab(next: Tab) {
+    if (next === tab) return;
+    if (dirty.current && !confirm("Discard your unsaved entry and change pages? Cancel to finish the entry first.")) return;
+    dirty.current = false; window.dispatchEvent(new Event("titan-cloud-form-discarded")); setTab(next);
+  }
+  function changeWorkArea(next: WorkArea) {
+    if (dirty.current && !confirm("Discard your unsaved entry and change work area?")) return;
+    dirty.current = false; localStorage.setItem("titan-employee-work-area", next); setWorkArea(next); setTab("home");
+  }
+  const workingFrom = workArea === "Service Truck" ? localStorage.getItem("titan-employee-assigned-truck") ?? employeeUser?.assignedServiceTruckId ?? "Select a service truck on Home" : workArea;
 
   useEffect(() => {
     if (!notice) return;
@@ -104,12 +114,13 @@ export function EmployeePortal() {
         </div>
         <button type="button" onClick={() => { clearCurrentUser(); setEmployee(null); setEmployeeUser(null); }}>Sign out</button>
       </header>
-      <section className="phone-surface">
+      <section className="phone-surface" onChangeCapture={() => { if (tab === "service" || tab === "refills" || tab === "fuelFarm") dirty.current = true; }}>
+        {tab !== "home" && <p className="auto-source-line">Working from: <strong>{workingFrom}</strong></p>}
         {notice && <p className="success-banner">{notice}</p>}
-        {tab === "home" && employeeUser && <HomeTab employee={employee} user={employeeUser} onNotice={setNotice} />}
-        {tab === "service" && <ServiceEntryTab employee={employee} onSubmit={() => setNotice("Service entry submitted to the shift sheet.")} />}
-        {tab === "fuelFarm" && <FuelFarmEntryTab employee={employee} />}
-        {tab === "refills" && <RefillsTab onSubmit={() => setNotice("Service truck refill recorded successfully.")} />}
+        {tab === "home" && employeeUser && <HomeTab employee={employee} user={employeeUser} workArea={workArea} onWorkArea={changeWorkArea} onNotice={setNotice} />}
+        {tab === "service" && <ServiceEntryTab workArea={workArea} employee={employee} onSubmit={() => { dirty.current = false; setNotice("Service entry submitted to the shift sheet."); }} />}
+        {tab === "fuelFarm" && <FuelFarmEntryTab employee={employee} onSaved={() => { dirty.current = false; }} />}
+        {tab === "refills" && <RefillsTab workArea={workArea} onSubmit={() => { dirty.current = false; setNotice("Refill recorded successfully."); }} />}
         {tab === "fuelSchedule" && employeeUser && (
           hasFuelScheduleAccess(employeeUser)
             ? <EmployeeFuelScheduleTab user={employeeUser} />
@@ -117,11 +128,11 @@ export function EmployeePortal() {
         )}
         {tab === "daily" && <DailySheetTab employee={employee} onSend={() => setNotice("Daily fuel ups submitted successfully")} />}
       </section>
-      <nav className="bottom-tabs" aria-label="Employee navigation">
-        {tabsForUser(employeeUser).map((item) => {
+      <nav className="bottom-tabs" aria-label="Employee navigation" style={{ gridTemplateColumns: `repeat(${tabsForUser(employeeUser, workArea).length}, minmax(0, 1fr))` }}>
+        {tabsForUser(employeeUser, workArea).map((item) => {
           const Icon = item.icon;
           return (
-            <button key={item.id} className={tab === item.id ? "active" : ""} aria-current={tab === item.id ? "page" : undefined} onClick={() => setTab(item.id)} type="button">
+            <button key={item.id} className={tab === item.id ? "active" : ""} aria-current={tab === item.id ? "page" : undefined} onClick={() => changeTab(item.id)} type="button">
               <Icon size={20} />
               <span>{item.label}</span>
             </button>
@@ -133,10 +144,13 @@ export function EmployeePortal() {
 }
 
 function HomeTab({
+  workArea, onWorkArea,
   employee,
   user,
   onNotice,
 }: {
+  workArea: WorkArea;
+  onWorkArea: (area: WorkArea) => void;
   employee: string;
   user: ManagedUser;
   onNotice: (message: string) => void;
@@ -147,8 +161,8 @@ function HomeTab({
   const [fuelEntries, setFuelEntries] = useState(loadFuelSubmissions);
   const [submittedAt, setSubmittedAt] = useState(localStorage.getItem("titan-daily-fuel-submitted-at") ?? "");
   const [trucks] = useState(loadServiceTrucks);
-  const [selectedTruckId, setSelectedTruckId] = useState(localStorage.getItem("titan-employee-assigned-truck") ?? user.assignedServiceTruckId ?? "RD4830");
-  const assignedTruck = trucks.find((truck) => truck.truckId === selectedTruckId) ?? trucks[0];
+  const [selectedTruckId, setSelectedTruckId] = useState(localStorage.getItem("titan-employee-assigned-truck") ?? user.assignedServiceTruckId ?? "");
+  const assignedTruck = trucks.find((truck) => truck.truckId === selectedTruckId);
   const employeeFuelEntries = fuelEntries.filter((entry) => entry.employee === employee);
   const serviceEntries = loadServiceEntries().filter((entry) => entry.employee === employee);
   const dailySubmitted = employeeFuelEntries.length > 0 && employeeFuelEntries.every((entry) => entry.submitted);
@@ -188,7 +202,7 @@ function HomeTab({
   }
 
   return (
-    <div className="employee-tab employee-home">
+    <div className="employee-tab employee-home" data-local-preference>
       <p className="eyebrow">{currentFuelShift()} — Presentation trial</p>
       <h2>Welcome, {employee.split(" ")[0]}</h2>
       <LocalBackupButton />
@@ -204,7 +218,8 @@ function HomeTab({
         {!messageRead && <button className="secondary-button" type="button" onClick={markMessageRead}>Mark as Read</button>}
       </section>
 
-      {serviceRole ? (
+      <section className="employee-home-card"><h3>Work Area</h3><label>Where are you working?<select value={workArea} onChange={event => onWorkArea(event.target.value as WorkArea)}>{workAreas.map(area => <option key={area}>{area}</option>)}</select></label><p>The bottom navigation and stock source follow your selected area.</p></section>
+      {workArea === "Service Truck" ? (
         <>
           <section className="employee-home-card assigned-truck-card">
             <div className="employee-card-head">
@@ -216,6 +231,7 @@ function HomeTab({
             </div>
             <label className="employee-truck-select">Truck employee is in
               <select value={assignedTruck?.truckId ?? ""} onChange={(event) => selectAssignedTruck(event.target.value)}>
+                <option value="">Select your service truck</option>
                 {trucks.map((truck) => <option key={truck.truckId}>{truck.truckId}</option>)}
               </select>
             </label>
@@ -377,7 +393,7 @@ function EmployeeFuelScheduleTab({ user }: { user: ManagedUser }) {
       <p className="eyebrow">Day shift - {assignedTruckId || "No assigned truck"}</p>
       <h2>Fuel Schedule</h2>
       <label className="employee-truck-select">Service Truck Schedule
-        <select value={assignedTruckId} onChange={(event) => selectScheduleTruck(event.target.value)}>
+        <select value={assignedTruckId} disabled>
           {trucks.map((truck) => <option key={truck.truckId} value={truck.truckId}>{truck.truckId} - {truck.registration}</option>)}
         </select>
       </label>
@@ -460,7 +476,7 @@ function ScanTab({ onScan }: { onScan: () => void }) {
   );
 }
 
-type OilSource = "Workshop Storage" | "Service Truck Storage" | "Bulk Storage";
+type OilSource = "Workshop Storage" | "Service Truck Storage" | "Bulk Storage" | "Field Storage";
 type OilDraft = Record<string, { litres: number; source: OilSource; comments: string }>;
 
 const lastSmuByAsset: Record<string, number> = {
@@ -473,7 +489,7 @@ const lastSmuByAsset: Record<string, number> = {
   GR1412: 6438,
 };
 
-function ServiceEntryTab({ employee, onSubmit }: { employee: string; onSubmit: () => void }) {
+function ServiceEntryTab({ employee, workArea, onSubmit }: { employee: string; workArea: WorkArea; onSubmit: () => void }) {
   const [scanning, setScanning] = useState(false);
   const [assets, setAssets] = useState(loadAssets);
   const [trucks, setTrucks] = useState(loadServiceTrucks);
@@ -481,13 +497,13 @@ function ServiceEntryTab({ employee, onSubmit }: { employee: string; onSubmit: (
   const [loadedAsset, setLoadedAsset] = useState<EditableAsset | null>(null);
   const [currentSmu, setCurrentSmu] = useState("");
   const [fuelAdded, setFuelAdded] = useState("");
-  const [fuelSource, setFuelSource] = useState("Fuel Farm");
-  const [oilSource, setOilSource] = useState<OilSource>("Workshop Storage");
+  const [fuelSource, setFuelSource] = useState(workArea === "Service Truck" ? "Assigned Service Truck" : `${workArea} Storage`);
+  const [oilSource, setOilSource] = useState<OilSource>(areaOilSource(workArea));
   const [oilDraft, setOilDraft] = useState<OilDraft>({});
   const [generalComments, setGeneralComments] = useState("");
   const [localMessage, setLocalMessage] = useState("");
-  const [assignedTruckId, setAssignedTruckId] = useState(localStorage.getItem("titan-employee-assigned-truck") ?? "RD4830");
-  const assignedTruck = trucks.find((truck) => truck.truckId === assignedTruckId) ?? trucks[0];
+  const [assignedTruckId, setAssignedTruckId] = useState(localStorage.getItem("titan-employee-assigned-truck") ?? loadCurrentUser()?.assignedServiceTruckId ?? "");
+  const assignedTruck = trucks.find((truck) => truck.truckId === assignedTruckId);
   const lastSmu = loadedAsset ? lastSmuByAsset[loadedAsset.assetNumber] ?? 0 : 0;
   const smuNumber = Number(currentSmu);
   const smuWarning = loadedAsset && currentSmu && Number.isFinite(smuNumber)
@@ -518,12 +534,12 @@ function ServiceEntryTab({ employee, onSubmit }: { employee: string; onSubmit: (
   useEffect(() => {
     const refreshServiceTrucks = () => {
       setTrucks(loadServiceTrucks());
-      setAssignedTruckId(localStorage.getItem("titan-employee-assigned-truck") ?? "RD4830");
+      setAssignedTruckId(localStorage.getItem("titan-employee-assigned-truck") ?? loadCurrentUser()?.assignedServiceTruckId ?? "");
     };
     const refreshAssignedTruck = (event: Event) => {
       const truckId = event instanceof CustomEvent && typeof event.detail === "string"
         ? event.detail
-        : localStorage.getItem("titan-employee-assigned-truck") ?? "RD4830";
+        : localStorage.getItem("titan-employee-assigned-truck") ?? loadCurrentUser()?.assignedServiceTruckId ?? "";
       setAssignedTruckId(truckId);
       setTrucks(loadServiceTrucks());
     };
@@ -568,78 +584,6 @@ function ServiceEntryTab({ employee, onSubmit }: { employee: string; onSubmit: (
     }));
   }
 
-  function deductAssignedTruckFuel(litres: number) {
-    if (fuelSource === "Fuel Farm" && litres > 0) {
-      saveBulkTanks(loadBulkTanks().map((tank) => tank.productId === "diesel" ? {
-        ...tank, currentLitres: tank.currentLitres - litres,
-        expectedLitres: (tank.expectedLitres ?? tank.currentLitres) - litres,
-      } : tank));
-      return;
-    }
-    if (!assignedTruck || litres <= 0 || fuelSource !== "Assigned Service Truck") return;
-    const latestTrucks = loadServiceTrucks();
-    const currentAssignedTruckId = localStorage.getItem("titan-employee-assigned-truck") ?? assignedTruck.truckId;
-    const updated = latestTrucks.map((truck) => {
-      if (truck.truckId !== currentAssignedTruckId) return truck;
-      return {
-        ...truck,
-        oilGroups: truck.oilGroups.map((group) => {
-          const isFuel = group.productId === "diesel" || group.name.toLowerCase().includes("diesel") || group.system.toLowerCase().includes("fuel");
-          return isFuel ? { ...group, current: group.current - litres, expectedLitres: (group.expectedLitres ?? group.current) - litres } : group;
-        }),
-      };
-    });
-    setTrucks(updated);
-    saveServiceTrucks(updated);
-  }
-
-  function deductAssignedTruckOils(entries: Array<{ product: string; litres: number; source: OilSource }>) {
-    if (!assignedTruck) return;
-    const serviceTruckEntries = entries.filter((entry) => entry.source === "Service Truck Storage" && entry.litres > 0);
-    if (!serviceTruckEntries.length) return;
-    const updated = loadServiceTrucks().map((truck) => {
-      if (truck.truckId !== assignedTruck.truckId) return truck;
-      return {
-        ...truck,
-        oilGroups: truck.oilGroups.map((group) => {
-          const productId = group.productId ?? productIdForName(group.name);
-          const totalDeduct = serviceTruckEntries
-            .filter((entry) => productIdForName(entry.product) === productId)
-            .reduce((sum, entry) => sum + entry.litres, 0);
-          return totalDeduct ? { ...group, current: group.current - totalDeduct, expectedLitres: (group.expectedLitres ?? group.current) - totalDeduct } : group;
-        }),
-      };
-    });
-    setTrucks(updated);
-    saveServiceTrucks(updated);
-  }
-
-  function deductWorkshopOils(entries: Array<{ product: string; litres: number; source: OilSource }>) {
-    const workshopEntries = entries.filter((entry) => entry.source === "Workshop Storage" && entry.litres > 0);
-    if (!workshopEntries.length) return;
-    const workshopStock = loadWorkshopStock();
-    const updated = workshopStock.map((stock) => {
-      const totalDeduct = workshopEntries
-        .filter((entry) => productIdForName(entry.product) === stock.productId)
-        .reduce((sum, entry) => sum + entry.litres, 0);
-      return totalDeduct ? { ...stock, current: Math.max(0, stock.current - totalDeduct), expectedLitres: (stock.expectedLitres ?? stock.current) - totalDeduct } : stock;
-    });
-    saveWorkshopStock(updated);
-  }
-
-  function deductBulkOils(entries: Array<{ product: string; litres: number; source: OilSource }>) {
-    const bulkEntries = entries.filter((entry) => entry.source === "Bulk Storage" && entry.litres > 0);
-    if (!bulkEntries.length) return;
-    const bulkTanks = loadBulkTanks();
-    const updated = bulkTanks.map((tank) => {
-      const totalDeduct = bulkEntries
-        .filter((entry) => productIdForName(entry.product) === tank.productId)
-        .reduce((sum, entry) => sum + entry.litres, 0);
-      return totalDeduct ? { ...tank, currentLitres: Math.max(0, tank.currentLitres - totalDeduct), expectedLitres: (tank.expectedLitres ?? tank.currentLitres) - totalDeduct } : tank;
-    });
-    saveBulkTanks(updated);
-  }
-
   function submitServiceEntry() {
     if (!loadedAsset) {
       alert("Load an asset before submitting service entry.");
@@ -669,25 +613,13 @@ function ServiceEntryTab({ employee, onSubmit }: { employee: string; onSubmit: (
       ? assignedTruck?.truckId ?? assignedTruckId ?? fuelSource
       : fuelSource;
 
-    const required = new Map<string, { source: string; product: string; litres: number }>();
-    const requireStock = (source: string, product: string, litres: number) => {
-      const key = `${source}:${product}`;
-      required.set(key, { source, product, litres: (required.get(key)?.litres ?? 0) + litres });
-    };
-    if (fuelLitres > 0 && fuelSource !== "Other") requireStock(fuelSource === "Fuel Farm" ? "Bulk Storage" : "Service Truck Storage", "diesel", fuelLitres);
-    for (const { oil, draft } of oilEntries) requireStock(oilSource, productIdForName(oil.product), draft.litres);
-    for (const request of required.values()) {
-      const matches = request.source === "Bulk Storage"
-        ? loadBulkTanks().filter(item => item.productId === request.product).map(item => item.currentLitres)
-        : request.source === "Workshop Storage"
-          ? loadWorkshopStock().filter(item => item.productId === request.product).map(item => item.current)
-          : (loadServiceTrucks().find(item => item.truckId === assignedTruck?.truckId)?.oilGroups ?? [])
-            .filter(item => (item.productId ?? productIdForName(item.name)) === request.product).map(item => item.current);
-      if (matches.length !== 1 || matches[0] < request.litres) {
-        alert(`Check ${request.product} in ${request.source}: one matching compartment with enough stock is required.`);
-        return;
-      }
-    }
+    let nextStock;
+    try {
+      nextStock = prepareAreaUsage(loadSiteStock(), workArea, assignedTruckId, [
+        ...(fuelLitres > 0 ? [{ product: "diesel", litres: fuelLitres }] : []),
+        ...oilEntries.map(({ oil, draft }) => ({ product: productIdForName(oil.product), litres: draft.litres })),
+      ]);
+    } catch (error) { alert(error instanceof Error ? error.message : "Check source stock."); return; }
 
     const serviceEntry: ServiceEntryRecord = {
       id: `service-${Date.now()}`,
@@ -706,6 +638,7 @@ function ServiceEntryTab({ employee, onSubmit }: { employee: string; onSubmit: (
         capacity: oil.capacity,
         litres: draft.litres,
         source: oilSource,
+        sourceLocation: workArea === "Service Truck" ? assignedTruckId : workArea,
         comments: draft.comments,
       })),
       comments: generalComments,
@@ -731,18 +664,16 @@ function ServiceEntryTab({ employee, onSubmit }: { employee: string; onSubmit: (
         ...fuelEntries,
       ]);
       recordScheduledFuelUp(loadedAsset.assetNumber, fuelLitres, employee, resolvedFuelSource, currentFuelShift(), smuNumber);
-      deductAssignedTruckFuel(fuelLitres);
+
     }
-    deductAssignedTruckOils(serviceEntry.oils);
-    deductWorkshopOils(serviceEntry.oils);
-    deductBulkOils(serviceEntry.oils);
+    saveSiteStock(nextStock);
 
     setLoadedAsset(null);
     setManualAsset("");
     setCurrentSmu("");
     setFuelAdded("");
-    setFuelSource("Fuel Farm");
-    setOilSource("Workshop Storage");
+    setFuelSource(workArea === "Service Truck" ? "Assigned Service Truck" : `${workArea} Storage`);
+    setOilSource(areaOilSource(workArea));
     setOilDraft({});
     setGeneralComments("");
     setLocalMessage("Service entry recorded successfully");
@@ -789,21 +720,13 @@ function ServiceEntryTab({ employee, onSubmit }: { employee: string; onSubmit: (
               <input inputMode="numeric" type="number" min={0} value={fuelAdded} onChange={(event) => setFuelAdded(event.target.value)} />
             </label>
             <label>Fuel Source
-              <select value={fuelSource} onChange={(event) => setFuelSource(event.target.value)}>
-                <option>Fuel Farm</option>
-                <option>Assigned Service Truck</option>
-                <option>Other</option>
-              </select>
+              <select value={fuelSource} disabled><option>{fuelSource}</option></select>
             </label>
             {fuelSource === "Assigned Service Truck" && <div className="auto-source-line"><span>Assigned Truck:</span><strong>{assignedTruck?.truckId ?? "No assigned truck"}</strong></div>}
           </section>
           <h3>Oil / Service Items</h3>
           <label>Oil Source
-            <select value={oilSource} onChange={(event) => setOilSource(event.target.value as OilSource)}>
-              <option>Workshop Storage</option>
-              <option>Service Truck Storage</option>
-              <option>Bulk Storage</option>
-            </select>
+            <select value={oilSource} disabled><option>{oilSource}</option></select>
           </label>
           {oilSource === "Service Truck Storage" && (
             <div className="auto-source-line">
@@ -866,15 +789,15 @@ function workshopProductsFromStore(): WorkshopRefillGroup[] {
   }));
 }
 
-function RefillsTab({ onSubmit }: { onSubmit: () => void }) {
-  const [targetType, setTargetType] = useState<"Service Truck" | "Workshop Storage">("Service Truck");
+function RefillsTab({ workArea, onSubmit }: { workArea: WorkArea; onSubmit: () => void }) {
+  const targetType = workArea === "Service Truck" ? "Service Truck" : `${workArea} Storage`;
   const [trucks, setTrucks] = useState(loadServiceTrucks);
   const [bulkTanks, setBulkTanks] = useState(loadBulkTanks);
-  const [selectedTruckId, setSelectedTruckId] = useState(loadServiceTrucks()[0]?.truckId ?? "ST-07");
+  const [selectedTruckId, setSelectedTruckId] = useState(localStorage.getItem("titan-employee-assigned-truck") ?? loadCurrentUser()?.assignedServiceTruckId ?? "");
   const [draft, setDraft] = useState<RefillDraft>({});
   const [workshopLevels, setWorkshopLevels] = useState<WorkshopRefillGroup[]>(workshopProductsFromStore);
-  const selectedTruck = trucks.find((truck) => truck.truckId === selectedTruckId) ?? trucks[0];
-  const compartments = targetType === "Service Truck" ? selectedTruck?.oilGroups ?? [] : workshopLevels;
+  const selectedTruck = trucks.find((truck) => truck.truckId === selectedTruckId);
+  const compartments: ServiceTruckOilGroup[] = targetType === "Service Truck" ? selectedTruck?.oilGroups ?? [] : workArea === "Field" ? loadFacilities().filter(row => row.department === "Field").map(row => ({ id: row.id, name: row.name, productId: row.productId, current: row.current, capacity: row.capacity, system: "Field Storage", tone: "green" })) : workshopLevels;
 
   function updateDraft(product: string, value: string | number) {
     setDraft((current) => ({
@@ -910,7 +833,7 @@ function RefillsTab({ onSubmit }: { onSubmit: () => void }) {
         const sources = loadBulkTanks().filter(tank => tank.productId === getProductId(group));
         if (sources.length !== 1) throw new Error(`Select the source for ${group.name} in Site Oil Storage; one matching bulk tank is required here.`);
         const index = selectedTruck?.oilGroups.findIndex(item => item.name === group.name) ?? -1;
-        const destination = targetType === "Service Truck" ? `truck:${selectedTruck?.truckId}:${selectedTruck?.oilGroups[index]?.id ?? selectedTruck?.oilGroups[index]?.name}` : `workshop:${group.id}`;
+        const destination = targetType === "Service Truck" ? `truck:${selectedTruck?.truckId}:${selectedTruck?.oilGroups[index]?.id ?? selectedTruck?.oilGroups[index]?.name}` : `${workArea === "Field" ? "facility" : "workshop"}:${group.id}`;
         next = applyStockOperation(next, { kind: "transfer", source: `bulk:${sources[0].id}`, destination, litres });
       }
       saveSiteStock(next);
@@ -922,19 +845,17 @@ function RefillsTab({ onSubmit }: { onSubmit: () => void }) {
     <div className="employee-form">
       <h2>Refills</h2>
       <label>Target Type
-        <select value={targetType} onChange={(event) => setTargetType(event.target.value as "Service Truck" | "Workshop Storage")}>
-          <option>Service Truck</option>
-          <option>Workshop Storage</option>
-        </select>
+        <select value={targetType} disabled><option>{targetType}</option></select>
       </label>
       {targetType === "Service Truck" && (
         <label>Service Truck
-          <select value={selectedTruckId} onChange={(event) => setSelectedTruckId(event.target.value)}>
+          <select value={selectedTruckId} disabled>
             {trucks.map((truck) => <option key={truck.truckId}>{truck.truckId}</option>)}
           </select>
         </label>
       )}
-      <h3>{targetType === "Service Truck" ? "Compartments to Refill" : "Workshop Products to Refill"}</h3>
+      <h3>{targetType === "Service Truck" ? "Compartments to Refill" : `${workArea} Products to Refill`}</h3>
+      {!compartments.length && <p>No compartments available. Select your truck on Home, or ask management to configure stock for this work area.</p>}
       <div className="refill-card-list">
         {compartments.map((group) => {
           const percent = Math.round((group.current / group.capacity) * 100);

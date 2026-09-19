@@ -41,6 +41,8 @@ export function CloudGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true;
     const markEdited = () => { dirty.current = true; };
+    const discardForm = () => { if (!engine.current?.pending && !busyRef.current) dirty.current = false; };
+    window.addEventListener("titan-cloud-form-discarded", discardForm);
     window.addEventListener("titan-cloud-form-edited", markEdited);
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, next) => {
       if (active) { setSession(next); setAuthLoaded(true); }
@@ -58,7 +60,7 @@ export function CloudGate({ children }: { children: ReactNode }) {
       });
     };
     window.addEventListener("titan-cloud-signout", logout);
-    return () => { active = false; subscription.unsubscribe(); window.removeEventListener("titan-cloud-signout", logout); window.removeEventListener("titan-cloud-form-edited", markEdited); };
+    return () => { active = false; subscription.unsubscribe(); window.removeEventListener("titan-cloud-signout", logout); window.removeEventListener("titan-cloud-form-edited", markEdited); window.removeEventListener("titan-cloud-form-discarded", discardForm); };
   }, []);
 
   const transport: Transport = {
@@ -239,7 +241,7 @@ export function CloudGate({ children }: { children: ReactNode }) {
       <span>{status}</span><Link to="/employee">Employee</Link><Link to="/management/dashboard">Management</Link>
       {remoteWaiting && <button onClick={() => { setSaveError("Another device changed the shared records. Reloading will discard this form’s unsaved edits."); }}>Review update</button>}
     </div>
-    <div key={epoch} className={busy || saveError ? "cloud-blocked" : ""} onChangeCapture={() => { dirty.current = true; }} aria-busy={busy}>
+    <div key={epoch} className={busy || saveError ? "cloud-blocked" : ""} onChangeCapture={event => { if (!(event.target instanceof Element && event.target.closest("[data-local-preference]"))) dirty.current = true; }} aria-busy={busy}>
       {children}
     </div>
     {(busy || saveError) && <div className="cloud-overlay"><section role="dialog" aria-modal="true" aria-label="Shared trial save">
