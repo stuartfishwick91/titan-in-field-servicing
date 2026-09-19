@@ -38,6 +38,8 @@ export function CloudGate({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
+    const markEdited = () => { dirty.current = true; };
+    window.addEventListener("titan-cloud-form-edited", markEdited);
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, next) => {
       if (active) { setSession(next); setAuthLoaded(true); }
     });
@@ -54,7 +56,7 @@ export function CloudGate({ children }: { children: ReactNode }) {
       });
     };
     window.addEventListener("titan-cloud-signout", logout);
-    return () => { active = false; subscription.unsubscribe(); window.removeEventListener("titan-cloud-signout", logout); };
+    return () => { active = false; subscription.unsubscribe(); window.removeEventListener("titan-cloud-signout", logout); window.removeEventListener("titan-cloud-form-edited", markEdited); };
   }, []);
 
   const transport: Transport = {
