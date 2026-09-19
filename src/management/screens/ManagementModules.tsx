@@ -1,5 +1,5 @@
 import { readSharedItem, writeSharedItem } from "../../cloud/sharedStorage";
-import { loadSiteStock, saveSiteStock } from "../../data/siteInventory";
+import { loadStockAudit, loadFacilities, saveFacilities, loadSiteStock, saveSiteStock } from "../../data/siteInventory";
 import { applyStockOperation } from "../../data/siteInventoryModel";
 import { Bell, Download, Droplets, Edit2, FileText, Plus, Printer, QrCode, Save, Upload, UserRound } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
@@ -483,30 +483,36 @@ function TankDetailPanel({
   );
 }
 
-export function WorkshopStorage() {
+export function WorkshopStorage({ department = "Workshop" }: { department?: "Workshop" | "Field" }) {
+  const storageArea = department === "Field" ? "Field Storage" : "Workshop Storage";
+  const loadDepartmentStock = (): WorkshopStockRecord[] => department === "Workshop" ? loadWorkshopStock() : loadFacilities().filter(row => row.department === "Field").map(row => ({ id: row.id, productId: row.productId, name: row.name, current: row.current, expectedLitres: row.expected, capacity: row.capacity, tone: "green" }));
+  const blankCompartment: WorkshopStockRecord = { id: "", productId: "engine-15w40", name: "Engine Oil 15W-40", current: 0, expectedLitres: 0, capacity: 1000, tone: "green" };
   const alertSettings = loadSystemAlertSettings();
   const [editing, setEditing] = useState(false);
   const [refilling, setRefilling] = useState(false);
   const [dipping, setDipping] = useState(false);
   const [message, setMessage] = useState("");
   const [editingWorkshopName, setEditingWorkshopName] = useState("");
-  const [workshopLevels, setWorkshopLevelsState] = useState<WorkshopStockRecord[]>(loadWorkshopStock);
+  const [workshopLevels, setWorkshopLevelsState] = useState<WorkshopStockRecord[]>(loadDepartmentStock);
   const [adjustmentRegister, setAdjustmentRegister] = useState<StockAdjustmentRegisterEntry[]>(loadStockAdjustmentRegister);
   const [pendingWorkshopAdjustment, setPendingWorkshopAdjustment] = useState<{ type: "edit" | "dip"; product: string; previousLitres: number; newLitres: number } | null>(null);
-  const [draft, setDraft] = useState(workshopLevels[0]);
+  const [draft, setDraft] = useState(workshopLevels[0] ?? blankCompartment);
   const [dipLitres, setDipLitres] = useState(workshopLevels[0]?.current ?? 0);
-  const [refillDraft, setRefillDraft] = useState({ product: workshopLevels[0].name, litres: 250, source: "Engine Oil 15W-40", employee: "Admin User" });
+  const [refillDraft, setRefillDraft] = useState({ product: workshopLevels[0]?.name ?? "", litres: 250, source: "Engine Oil 15W-40", employee: "Admin User" });
   const workshopDetailRef = useRef<HTMLDivElement | null>(null);
-  const [refillHistory, setRefillHistory] = useState<string[][]>([]);
-  const newWorkshopCompartment: WorkshopStockRecord = { id: `workshop-new-${Date.now()}`, productId: "new-oil", name: `Workshop New Oil ${workshopLevels.length + 1}`, current: 0, expectedLitres: 0, capacity: 1000, tone: "yellow" };
+  const refillHistory = loadStockAudit().flatMap(event => event.changes.filter(change => change.department === department && !change.configuration && change.after > change.before && Math.abs((change.after - change.before) - (change.expectedAfter - change.expectedBefore)) < 0.0001).flatMap(change => {
+    const source = event.changes.find(item => item.productId === change.productId && item.after < item.before && !item.configuration);
+    return source ? [[new Date(event.at).toLocaleString(), change.name, source.name, department, (change.after - change.before).toLocaleString() + " L", event.user]] : [];
+  }));
+  const newWorkshopCompartment: WorkshopStockRecord = { id: crypto.randomUUID(), productId: "new-oil", name: `${department} New Oil ${workshopLevels.length + 1}`, current: 0, expectedLitres: 0, capacity: 1000, tone: "yellow" };
 
   useEffect(() => {
-    const refresh = () => setWorkshopLevelsState(loadWorkshopStock());
+    const refresh = () => setWorkshopLevelsState(loadDepartmentStock());
     window.addEventListener("storage", refresh);
-    window.addEventListener("titan-workshop-stock-updated", refresh);
+    window.addEventListener(department === "Field" ? "titan-site-stock-updated" : "titan-workshop-stock-updated", refresh);
     return () => {
       window.removeEventListener("storage", refresh);
-      window.removeEventListener("titan-workshop-stock-updated", refresh);
+      window.removeEventListener(department === "Field" ? "titan-site-stock-updated" : "titan-workshop-stock-updated", refresh);
     };
   }, []);
 
@@ -530,11 +536,15 @@ export function WorkshopStorage() {
   function setWorkshopLevels(next: WorkshopStockRecord[] | ((items: WorkshopStockRecord[]) => WorkshopStockRecord[])) {
     const resolved = typeof next === "function" ? next(workshopLevels) : next;
     setWorkshopLevelsState(resolved);
-    saveWorkshopStockStore(resolved);
+    if (department === "Workshop") saveWorkshopStockStore(resolved);
+    else saveFacilities([...loadFacilities().filter(row => row.department !== "Field"), ...resolved.map(row => ({ id: row.id, department: "Field" as const, name: row.name, productId: row.productId, current: row.current, expected: row.expectedLitres ?? row.current, capacity: row.capacity }))]);
   }
 
   function saveWorkshopStock(acknowledged = false) {
+    if (!draft.name.trim() || !Number.isFinite(draft.capacity) || draft.capacity <= 0 || !Number.isFinite(draft.current) || draft.current < 0 || draft.current > draft.capacity) { setMessage("Enter a name, positive capacity and stock between zero and capacity."); return; }
+    if (workshopLevels.some(item => item.name === draft.name && item.name !== editingWorkshopName)) { setMessage("Use a unique compartment name."); return; }
     const previousItem = workshopLevels.find((item) => item.name === editingWorkshopName);
+    if (previousItem && previousItem.productId !== draft.productId && (previousItem.current !== 0 || (previousItem.expectedLitres ?? previousItem.current) !== 0)) { setMessage("Transfer or reconcile stock before changing its product."); return; }
     if (previousItem && previousItem.current !== draft.current && !acknowledged) {
       setPendingWorkshopAdjustment({ type: "edit", product: previousItem.name, previousLitres: previousItem.current, newLitres: draft.current });
       return;
@@ -542,18 +552,18 @@ export function WorkshopStorage() {
     setWorkshopLevels((items) =>
       items.some((item) => item.name === editingWorkshopName)
         ? items.map((item) =>
-          item.name === editingWorkshopName ? { ...draft, productId: productIdForName(draft.name), expectedLitres: item.expectedLitres ?? item.current } : item,
+          item.name === editingWorkshopName ? { ...draft, productId: draft.productId, expectedLitres: item.expectedLitres ?? item.current } : item,
         )
         : [...items, { ...draft, productId: productIdForName(draft.name), expectedLitres: draft.current }],
     );
     if (previousItem && previousItem.current !== draft.current) {
       recordStockAdjustment({
-        area: "Workshop Storage",
+        area: storageArea,
         product: draft.name,
         previousLitres: previousItem.current,
         newLitres: draft.current,
         user: "Admin User",
-        acknowledgement: "Workshop edit current litre adjustment acknowledged.",
+        acknowledgement: `${department} edit current litre adjustment acknowledged.`,
       });
       setAdjustmentRegister(loadStockAdjustmentRegister());
     }
@@ -563,16 +573,17 @@ export function WorkshopStorage() {
   }
 
   function addWorkshopCompartment() {
-    setWorkshopLevels((items) => [...items, newWorkshopCompartment]);
     setDraft(newWorkshopCompartment);
-    setEditingWorkshopName(newWorkshopCompartment.name);
+    setEditingWorkshopName("");
     setEditing(true);
     setRefilling(false);
     setDipping(false);
-    setMessage("New workshop oil compartment added. Update details and save.");
+    setMessage(`Enter the new ${department.toLowerCase()} compartment details and save.`);
   }
 
   function removeWorkshopCompartment() {
+    const stored = workshopLevels.find(item => item.name === editingWorkshopName);
+    if (stored && (stored.current !== 0 || (stored.expectedLitres ?? stored.current) !== 0)) { setMessage("Transfer or reconcile remaining stock before removing the compartment."); return; }
     if (!confirm(`Remove ${draft.name}?`)) return;
     const remaining = workshopLevels.filter((item) => item.name !== editingWorkshopName);
     setWorkshopLevels(remaining);
@@ -601,6 +612,7 @@ export function WorkshopStorage() {
   }
 
   function saveWorkshopDip(acknowledged = false) {
+    if (!Number.isFinite(dipLitres) || dipLitres < 0 || dipLitres > draft.capacity) { setMessage("Enter measured litres between zero and capacity."); return; }
     if (dipLitres !== draft.current && !acknowledged) {
       setPendingWorkshopAdjustment({ type: "dip", product: draft.name, previousLitres: draft.current, newLitres: dipLitres });
       return;
@@ -612,12 +624,12 @@ export function WorkshopStorage() {
     );
     if (dipLitres !== draft.current) {
       recordStockAdjustment({
-        area: "Workshop Storage",
+        area: storageArea,
         product: draft.name,
         previousLitres: draft.current,
         newLitres: dipLitres,
         user: "Admin User",
-        acknowledgement: "Workshop dip current litre adjustment acknowledged.",
+        acknowledgement: `${department} dip current litre adjustment acknowledged.`,
       });
       setAdjustmentRegister(loadStockAdjustmentRegister());
     }
@@ -640,11 +652,10 @@ export function WorkshopStorage() {
   function saveWorkshopRefill() {
     try {
       const source = loadBulkTanks().find(item => item.name === refillDraft.source);
-      const destination = loadWorkshopStock().find(item => item.name === refillDraft.product);
-      if (!source || !destination) throw new Error("Select the source bulk tank and workshop compartment.");
-      saveSiteStock(applyStockOperation(loadSiteStock(), { kind: "transfer", source: `bulk:${source.id}`, destination: `workshop:${destination.id}`, litres: refillDraft.litres }));
+      const destination = loadDepartmentStock().find(item => item.name === refillDraft.product);
+      if (!source || !destination) throw new Error("Select the source bulk tank and destination compartment.");
+      saveSiteStock(applyStockOperation(loadSiteStock(), { kind: "transfer", source: `bulk:${source.id}`, destination: `${department === "Field" ? "facility" : "workshop"}:${destination.id}`, litres: refillDraft.litres }));
     } catch (error) { setMessage(error instanceof Error ? error.message : "Could not record refill."); return; }
-    setRefillHistory((items) => [[new Date().toLocaleString(), refillDraft.product, refillDraft.source, "Workshop", `${refillDraft.litres.toLocaleString()} L`, refillDraft.employee], ...items]);
     setRefilling(false);
     setMessage(`${refillDraft.product} refill recorded.`);
   }
@@ -653,22 +664,23 @@ export function WorkshopStorage() {
     <section className="bulk-original-page">
       <header className="bulk-page-header">
         <div>
-          <h2>Workshop Storage</h2>
-          <p>Workshop oil stock separate from main bulk tanks</p>
+          <h2>{storageArea}</h2>
+          <p>{department} oil stock separate from main bulk tanks</p>
         </div>
       </header>
       <section className="original-panel">
         <div className="section-heading-row">
           <div className="section-heading">
-            <h3>Workshop Oil Storage</h3>
-            <span>Monitor workshop oils, coolant and waste oil</span>
+            <h3>{department} Oil Storage</h3>
+            <span>Monitor {department.toLowerCase()} oils, coolant and waste oil</span>
           </div>
           <div className="button-row workshop-actions">
             <button className="primary-button add-delivery-button" type="button" onClick={addWorkshopCompartment}><Plus size={18} /> Add Oil Compartment</button>
-            <button className="primary-button add-delivery-button" type="button" onClick={() => { setRefilling(true); setEditing(false); setDipping(false); }}><Plus size={18} /> Record Refill</button>
-            <button className="primary-button add-delivery-button" type="button" onClick={() => openWorkshopDetails(draft)}><Edit2 size={18} /> Edit Workshop Stock</button>
+            <button className="primary-button add-delivery-button" type="button" disabled={!workshopLevels.length} onClick={() => { setRefillDraft({ ...refillDraft, product: workshopLevels[0]?.name ?? "" }); setRefilling(true); setEditing(false); setDipping(false); }}><Plus size={18} /> Record Refill</button>
+            <button className="primary-button add-delivery-button" type="button" disabled={!workshopLevels.length} onClick={() => openWorkshopDetails(draft)}><Edit2 size={18} /> Edit {department} Stock</button>
           </div>
         </div>
+        {!workshopLevels.length && <p>No compartments yet. Select Add Oil Compartment to set up {department.toLowerCase()} stock.</p>}
         <div className="workshop-level-grid">
           {workshopLevels.map((tank) => (
             <OriginalTankCard
@@ -685,13 +697,13 @@ export function WorkshopStorage() {
         </div>
       </section>
       <ReconciliationPanel
-        title="Workshop Storage Reconciliation"
-        subtitle="Workshop expected stock compared with actual counts"
-        items={workshopReconciliationFromLevels(workshopLevels)}
+        title={`${storageArea} Reconciliation`}
+        subtitle={`${department} expected stock compared with actual counts`}
+        items={workshopReconciliationFromLevels(workshopLevels).map(item => ({ ...item, area: department === "Field" ? "Field" : item.area }))}
       />
       {message && <p className="success-banner">{message}</p>}
       <div className="panel table-panel">
-        <div className="panel-title"><FileText size={20} /><h2>Workshop Refill History</h2></div>
+        <div className="panel-title"><FileText size={20} /><h2>{department} Refill History</h2></div>
         <DataTable headers={["Date/time", "Product", "Source", "Target", "Litres", "Employee"]} rows={refillHistory} />
       </div>
       {(editing || refilling || dipping) && (
@@ -700,7 +712,7 @@ export function WorkshopStorage() {
         <section className="detail-panel">
           <div className="section-heading-row">
             <div className="section-heading">
-              <h3>Workshop Stock Details</h3>
+              <h3>{department} Stock Details</h3>
               <span>Edit baseline stock levels or record a supervisor tank dip</span>
             </div>
             <button className="secondary-button" type="button" onClick={() => setEditing(false)}>Cancel</button>
@@ -722,6 +734,7 @@ export function WorkshopStorage() {
                 {workshopLevels.map((item) => <option key={item.name}>{item.name}</option>)}
               </select>
             </label>
+            <label>Oil / fluid type<select value={draft.productId} onChange={event => setDraft({ ...draft, productId: event.target.value })}>{[...new Set([draft.productId, ...loadBulkTanks().map(tank => tank.productId)])].map(id => <option key={id} value={id}>{loadBulkTanks().find(tank => tank.productId === id)?.name ?? id}</option>)}</select></label>
             <label>Compartment name
               <input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
             </label>
@@ -731,17 +744,12 @@ export function WorkshopStorage() {
             <label>Capacity
               <input type="number" value={draft.capacity} onChange={(event) => setDraft({ ...draft, capacity: Number(event.target.value) })} />
             </label>
-            <label>Low stock alert %
-              <input type="number" defaultValue={30} />
-            </label>
-            <label>Notes
-              <input defaultValue="Workshop stock checked during shift handover." />
-            </label>
+
           </div>
           <div className="button-row detail-actions">
             <button className="primary-button" type="button" onClick={() => saveWorkshopStock()}><Save size={18} /> Save</button>
-            <button className="secondary-button" type="button" onClick={openWorkshopDip}>Record Dip</button>
-            <button className="secondary-button danger-edit" type="button" onClick={removeWorkshopCompartment}>Remove Compartment</button>
+            <button className="secondary-button" type="button" disabled={!editingWorkshopName} onClick={openWorkshopDip}>Record Dip</button>
+            <button className="secondary-button danger-edit" type="button" disabled={!editingWorkshopName} onClick={removeWorkshopCompartment}>Remove Compartment</button>
             <button className="secondary-button" type="button" onClick={() => setEditing(false)}>Cancel</button>
           </div>
         </section>
@@ -750,8 +758,8 @@ export function WorkshopStorage() {
         <section className="detail-panel">
           <div className="section-heading-row">
             <div className="section-heading">
-              <h3>Record Workshop Tank Dip</h3>
-              <span>Compare supervisor dip against expected workshop stock</span>
+              <h3>Record {department} Tank Dip</h3>
+              <span>Compare supervisor dip against expected {department.toLowerCase()} stock</span>
             </div>
             <button className="secondary-button" type="button" onClick={() => setDipping(false)}>Cancel</button>
           </div>
@@ -775,7 +783,7 @@ export function WorkshopStorage() {
           <div className="section-heading-row">
             <div className="section-heading">
               <h3>Record Refill</h3>
-              <span>Add workshop stock from a source bulk tank</span>
+              <span>Add {department.toLowerCase()} stock from a source bulk tank</span>
             </div>
             <button className="secondary-button" type="button" onClick={() => setRefilling(false)}>Cancel</button>
           </div>
@@ -815,8 +823,8 @@ export function WorkshopStorage() {
         />
       )}
       <StockAdjustmentRegisterTable
-        title="Workshop Storage Manual Adjustment Register"
-        rows={adjustmentRegister.filter((entry) => entry.area === "Workshop Storage")}
+        title={`${storageArea} Manual Adjustment Register`}
+        rows={adjustmentRegister.filter((entry) => entry.area === storageArea)}
       />
     </section>
   );

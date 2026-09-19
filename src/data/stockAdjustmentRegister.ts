@@ -1,5 +1,5 @@
 import { readSharedItem, writeSharedItem } from "../cloud/sharedStorage";
-export type StockAdjustmentArea = "Bulk Storage" | "Workshop Storage";
+export type StockAdjustmentArea = "Bulk Storage" | "Workshop Storage" | "Field Storage";
 
 export type StockAdjustmentRegisterEntry = {
   id: string;

@@ -158,9 +158,9 @@ export function ManagementPortal() {
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="live-fuel-status" element={<LiveFuelStatus />} />
               <Route path="bulk-storage" element={<SiteOilStorage key="site" />} />
-              <Route path="field-storage" element={<SiteOilStorage key="field" initialDepartment="Field" />} />
+              <Route path="field-storage" element={<WorkshopStorage key="field" department="Field" />} />
               <Route path="bulk-tanks" element={<BulkStorage />} />
-              <Route path="workshop-storage" element={<WorkshopStorage />} />
+              <Route path="workshop-storage" element={<WorkshopStorage key="workshop" />} />
               <Route path="service-trucks" element={<ServiceTrucks />} />
               <Route path="fleet-management" element={<FleetManagement />} />
               <Route path="employee-management" element={<section className="panel"><h1>Trial account</h1><p>This presentation uses the same administrator email on both devices. Separate employee logins and permissions are not enabled in this trial.</p><p>Manage the app password in Supabase Authentication → Users. Prototype PIN accounts do not grant access to shared records.</p></section>} />
