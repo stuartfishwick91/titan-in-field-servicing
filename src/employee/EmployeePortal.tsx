@@ -624,6 +624,7 @@ function ServiceEntryTab({ employee, workArea, onSubmit }: { employee: string; w
     const serviceEntry: ServiceEntryRecord = {
       id: `service-${Date.now()}`,
       date: currentReportDate(),
+      shift: currentFuelShift(),
       employee,
       assetNumber: loadedAsset.assetNumber,
       make: loadedAsset.make,

@@ -1,3 +1,4 @@
+import { activityPeriod } from "../../data/dailyActivity";
 import { readSharedItem, writeSharedItem } from "../../cloud/sharedStorage";
 import { loadStockAudit, loadFacilities, saveFacilities, loadSiteStock, saveSiteStock } from "../../data/siteInventory";
 import { applyStockOperation } from "../../data/siteInventoryModel";
@@ -2261,7 +2262,8 @@ function defaultEmployeeDraft(): ManagedUser {
 
 export function Reports() {
   const reportToday = new Date().toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" });
-  const reportTodayIso = new Date().toISOString().slice(0, 10);
+  const reportTodayIso = new Date().toLocaleDateString("en-CA", { timeZone: "Australia/Brisbane" });
+  const [summaryFilters, setSummaryFilters] = useState({ dateIso: reportTodayIso, date: activityPeriod(new Date().toISOString())!.date, shift: "All" });
   const [filters, setFilters] = useState({ date: reportToday, employee: "All", asset: "", product: "", shift: "All", crew: "All" });
   const [dailyFuelFilters, setDailyFuelFilters] = useState({ dateIso: reportTodayIso, date: reportToday, shift: "All", fuelSource: "All" });
   const [exportedFuelSheets, setExportedFuelSheets] = useState<Record<string, string>>(() => {
@@ -2293,7 +2295,7 @@ export function Reports() {
     const [date, shift, fuelSource] = key.split("|");
     return [date, "Daily Fuel Sheet Report", shift, fuelSource, exportedAt, "Exported"];
   });
-  const summary = buildDailySummary();
+  const summary = buildDailySummary(summaryFilters.date, summaryFilters.shift);
   const reportHistory = buildReportHistory().filter((report) => {
     const employeeMatch = filters.employee === "All" || report.employee === filters.employee;
     const assetMatch = !filters.asset || report.asset.toLowerCase().includes(filters.asset.toLowerCase()) || report.name.toLowerCase().includes(filters.asset.toLowerCase());
@@ -2419,11 +2421,11 @@ export function Reports() {
       {message && <p className="success-banner">{message}</p>}
 
       <section className="report-dashboard-grid">
-        <ReportMetric label="Today's Fuel Used" value={`${summary.fuelUsed.toLocaleString()} L`} />
-        <ReportMetric label="Today's Oil Used" value={`${summary.oilUsed.toLocaleString()} L`} />
+        <ReportMetric label="Selected Period Fuel Used" value={`${summary.fuelUsed.toLocaleString()} L`} />
+        <ReportMetric label="Selected Period Oil Used" value={`${summary.oilUsed.toLocaleString()} L`} />
         <ReportMetric label="Bulk Variance" value={`${summary.unaccountedBulkOil.toLocaleString()} L`} tone={summary.unaccountedBulkOil ? "bad" : "good"} />
         <ReportMetric label="Workshop Variance" value={`${summary.unaccountedWorkshopOil.toLocaleString()} L`} tone={summary.unaccountedWorkshopOil ? "bad" : "good"} />
-        <ReportMetric label="Outstanding Fuel Sheets" value={summary.employeesOutstanding.toString()} tone={summary.employeesOutstanding ? "warn" : "good"} />
+        <ReportMetric label="Contributors Still to Submit" value={summary.employeesOutstanding.toString()} tone={summary.employeesOutstanding ? "warn" : "good"} />
       </section>
 
       <section className="original-panel">
@@ -2523,9 +2525,15 @@ export function Reports() {
         <div className="section-heading-row">
           <div className="section-heading">
             <h3>Automatic Daily Summary</h3>
-            <span>End-of-shift totals generated from submissions and stock movement</span>
+            <span>Live activity from saved entries for {summaryFilters.date} · {summaryFilters.shift === "All" ? "All shifts" : summaryFilters.shift}</span>
           </div>
         </div>
+        <div className="settings-grid" data-local-preference>
+          <label>Summary date<input type="date" value={summaryFilters.dateIso} onChange={event => { if (event.target.value) setSummaryFilters({ ...summaryFilters, dateIso: event.target.value, date: reportDateFromIso(event.target.value) }); }} /></label>
+          <label>Summary shift<select value={summaryFilters.shift} onChange={event => setSummaryFilters({ ...summaryFilters, shift: event.target.value })}><option>All</option><option>Day Shift</option><option>Night Shift</option></select></label>
+        </div>
+        <p>Includes saved activity, even before daily-sheet submission. Day: 6 am–6 pm; Night: remaining hours of the selected calendar date (Brisbane time). Refill and delivery counts use recorded movement history; opening balances and tank dips are excluded.</p>
+        {summary.unassignedShiftRecords > 0 && <p>{summary.unassignedShiftRecords} older records have no shift: included in All shifts only.</p>}
         <div className="daily-summary-grid">
           <ReportMetric label="Fuel Used" value={`${summary.fuelUsed.toLocaleString()} L`} />
           <ReportMetric label="Oil Used" value={`${summary.oilUsed.toLocaleString()} L`} />
@@ -2533,11 +2541,15 @@ export function Reports() {
           <ReportMetric label="Service Trucks Refilled" value={summary.serviceTrucksRefilled.toString()} />
           <ReportMetric label="Bulk Deliveries" value={summary.bulkDeliveries.toString()} />
           <ReportMetric label="Workshop Refills" value={summary.workshopRefills.toString()} />
-          <ReportMetric label="Unaccounted Bulk Oil" value={`${summary.unaccountedBulkOil.toLocaleString()} L`} tone={summary.unaccountedBulkOil ? "bad" : "good"} />
-          <ReportMetric label="Unaccounted Workshop Oil" value={`${summary.unaccountedWorkshopOil.toLocaleString()} L`} tone={summary.unaccountedWorkshopOil ? "bad" : "good"} />
+          <ReportMetric label="Machines Serviced" value={summary.machinesServiced.toString()} />
+          <ReportMetric label="Coolant Used" value={`${summary.coolantUsed.toLocaleString()} L`} />
+          <ReportMetric label="Field Refills" value={summary.fieldRefills.toString()} />
+          <ReportMetric label="Light Vehicle Refills" value={summary.lightVehicleRefills.toString()} />
           <ReportMetric label="Employees Submitted" value={summary.employeesSubmitted.toString()} tone="good" />
-          <ReportMetric label="Employees Outstanding" value={summary.employeesOutstanding.toString()} tone={summary.employeesOutstanding ? "warn" : "good"} />
+          <ReportMetric label="Contributors Still to Submit" value={summary.employeesOutstanding.toString()} tone={summary.employeesOutstanding ? "warn" : "good"} />
         </div>
+        <p>Submitted counts contributors whose saved entries in this period are all submitted. It does not infer attendance or missing employees.</p>
+        <DataTable headers={["Time", "Activity", "Department", "Location", "Product", "Litres", "Recorded by"]} emptyMessage="No deliveries or refills recorded for this period." rows={summary.movements.map(row => [new Date(row.at).toLocaleTimeString("en-AU", { timeZone: "Australia/Brisbane" }), row.type, row.department, row.location, row.product, row.litres.toLocaleString(), row.employee])} />
       </section>
 
       <section className="original-panel">

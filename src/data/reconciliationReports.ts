@@ -1,4 +1,5 @@
-import { loadSiteStock } from "./siteInventory";
+import { dailyActivity, activityPeriod } from "./dailyActivity";
+import { loadStockAudit, loadSiteStock } from "./siteInventory";
 import { loadBulkTanks, productIdForName, type BulkTankRecord } from "./bulkTankStore";
 import { loadFuelSubmissions } from "./fuelSubmissionStore";
 import { loadServiceEntries } from "./serviceEntryStore";
@@ -211,24 +212,12 @@ export function buildSubmittedDailyFuelSheetSummaryRows(filters: { date?: string
   );
 }
 
-export function buildDailySummary() {
-  const fuelRows = buildDailyFuelSheetRows();
+export function buildDailySummary(date = activityPeriod(new Date().toISOString())!.date, shift = "All") {
   const reconciliation = buildDailyReconciliation();
-  const submittedEmployees = new Set(fuelRows.filter((row) => row.status === "Submitted").map((row) => row.employee));
-  const activeEmployees = loadUsers().filter((user) => user.role === "Employee" && user.status === "Active").length;
-  const totalOilUsed = fuelRows.reduce((sum, row) => sum + row.engineOil + row.hydraulicOil + row.transmissionOil + row.coolant + row.otherOils, 0);
-  const serviceEntries = loadServiceEntries();
   return {
-    fuelUsed: fuelRows.reduce((sum, row) => sum + row.fuelAdded, 0),
-    oilUsed: totalOilUsed,
-    machinesFuelled: fuelRows.filter((row) => row.fuelAdded > 0).length,
-    serviceTrucksRefilled: 0,
-    bulkDeliveries: 0,
-    workshopRefills: serviceEntries.filter((entry) => entry.oils.some((oil) => oil.source === "Workshop Storage" && oil.litres > 0)).length,
-    unaccountedBulkOil: reconciliation.filter((item) => item.area === "Bulk Storage").reduce((sum, item) => sum + Math.abs(item.difference), 0),
-    unaccountedWorkshopOil: reconciliation.filter((item) => item.area === "Workshop Storage").reduce((sum, item) => sum + Math.abs(item.difference), 0),
-    employeesSubmitted: submittedEmployees.size,
-    employeesOutstanding: Math.max(0, activeEmployees - submittedEmployees.size),
+    ...dailyActivity(loadFuelSubmissions(), loadServiceEntries(), loadStockAudit(), date, shift),
+    unaccountedBulkOil: reconciliation.filter(item => item.area === "Bulk Storage").reduce((sum, item) => sum + Math.max(0, item.difference), 0),
+    unaccountedWorkshopOil: reconciliation.filter(item => item.area === "Workshop Storage").reduce((sum, item) => sum + Math.max(0, item.difference), 0),
   };
 }
 

@@ -12,6 +12,7 @@ export type ServiceOilEntry = {
 export type ServiceEntryRecord = {
   id: string;
   date: string;
+  shift?: "Day Shift" | "Night Shift";
   employee: string;
   assetNumber: string;
   make: string;
