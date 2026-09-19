@@ -2529,7 +2529,7 @@ export function Reports() {
           </div>
         </div>
         <div className="settings-grid" data-local-preference>
-          <label>Summary date<input type="date" value={summaryFilters.dateIso} onChange={event => { if (event.target.value) setSummaryFilters({ ...summaryFilters, dateIso: event.target.value, date: reportDateFromIso(event.target.value) }); }} /></label>
+          <label>Summary date<input type="date" value={summaryFilters.dateIso} onInput={event => { const value = event.currentTarget.value; if (value) setSummaryFilters(previous => ({ ...previous, dateIso: value, date: reportDateFromIso(value) })); }} onChange={event => { const value = event.target.value; if (value) setSummaryFilters(previous => ({ ...previous, dateIso: value, date: reportDateFromIso(value) })); }} /></label>
           <label>Summary shift<select value={summaryFilters.shift} onChange={event => setSummaryFilters({ ...summaryFilters, shift: event.target.value })}><option>All</option><option>Day Shift</option><option>Night Shift</option></select></label>
         </div>
         <p>Includes saved activity, even before daily-sheet submission. Day: 6 am–6 pm; Night: remaining hours of the selected calendar date (Brisbane time). Refill and delivery counts use recorded movement history; opening balances and tank dips are excluded.</p>
