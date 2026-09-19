@@ -63,3 +63,5 @@ workflows that have not received a full production-readiness audit. Do not claim
 that every feature is production-ready. Image data is included in the small trial
 workspace; a dedicated Storage bucket and normalized operational tables are the
 next scaling step.
+
+Site oil storage update: apply supabase/site-stock-schema.sql after trial-schema.sql for new installations. Bulk Storage now combines Bulk, Workshop, Service Trucks, Field and Light Vehicles. Configure Field/Light Vehicles compartments with verified opening balances. Transfers preserve site totals; deliveries and issues change expected balances; dips change recorded balances only. Shared movement history begins with this update and does not reconstruct historical movements. Existing truck stock becomes its initial expected balance. Department shortages and surpluses are kept separate. The older reconciliation report includes all locations as a current balance snapshot; use the site movement history for movement detail.

@@ -4,6 +4,7 @@ export const sharedKeys = [
   "titan-service-entries-v1", "titan-fuel-submissions-v2",
   "titan-stock-adjustment-register-v1", "titan-system-alert-settings-v1",
   "titan-branding-settings-v1", "titan-daily-fuel-sheet-export-history-v1",
+  "titan-site-facilities-v1", "titan-site-stock-audit-v1",
 ] as const;
 
 export type SharedDocuments = Record<string, string>;

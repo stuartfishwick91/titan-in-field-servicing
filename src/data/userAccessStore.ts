@@ -109,6 +109,7 @@ export const rolePermissions: Record<UserRole, string[]> = {
   Administrator: [
     "dashboard",
     "bulk-storage",
+    "bulk-tanks",
     "workshop-storage",
     "service-trucks",
     "live-fuel-status",
@@ -118,7 +119,7 @@ export const rolePermissions: Record<UserRole, string[]> = {
     "branding",
     "system-settings",
   ],
-  Supervisor: ["dashboard", "bulk-storage", "workshop-storage", "service-trucks", "live-fuel-status", "reports"],
+  Supervisor: ["dashboard", "bulk-storage", "bulk-tanks", "workshop-storage", "service-trucks", "live-fuel-status", "reports"],
   Employee: [],
 };
 

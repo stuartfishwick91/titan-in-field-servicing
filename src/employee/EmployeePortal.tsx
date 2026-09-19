@@ -1,3 +1,5 @@
+import { loadSiteStock, saveSiteStock } from "../data/siteInventory";
+import { applyStockOperation } from "../data/siteInventoryModel";
 import { AlertTriangle, ClipboardCheck, Eye, Fuel, Home, QrCode, Send, Truck, Wrench } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -580,7 +582,7 @@ function ServiceEntryTab({ employee, onSubmit }: { employee: string; onSubmit: (
         ...truck,
         oilGroups: truck.oilGroups.map((group) => {
           const isFuel = group.productId === "diesel" || group.name.toLowerCase().includes("diesel") || group.system.toLowerCase().includes("fuel");
-          return isFuel ? { ...group, current: Math.max(0, group.current - litres) } : group;
+          return isFuel ? { ...group, current: group.current - litres, expectedLitres: (group.expectedLitres ?? group.current) - litres } : group;
         }),
       };
     });
@@ -601,7 +603,7 @@ function ServiceEntryTab({ employee, onSubmit }: { employee: string; onSubmit: (
           const totalDeduct = serviceTruckEntries
             .filter((entry) => productIdForName(entry.product) === productId)
             .reduce((sum, entry) => sum + entry.litres, 0);
-          return totalDeduct ? { ...group, current: Math.max(0, group.current - totalDeduct) } : group;
+          return totalDeduct ? { ...group, current: group.current - totalDeduct, expectedLitres: (group.expectedLitres ?? group.current) - totalDeduct } : group;
         }),
       };
     });
@@ -617,7 +619,7 @@ function ServiceEntryTab({ employee, onSubmit }: { employee: string; onSubmit: (
       const totalDeduct = workshopEntries
         .filter((entry) => productIdForName(entry.product) === stock.productId)
         .reduce((sum, entry) => sum + entry.litres, 0);
-      return totalDeduct ? { ...stock, current: Math.max(0, stock.current - totalDeduct), expectedLitres: Math.max(0, (stock.expectedLitres ?? stock.current) - totalDeduct) } : stock;
+      return totalDeduct ? { ...stock, current: Math.max(0, stock.current - totalDeduct), expectedLitres: (stock.expectedLitres ?? stock.current) - totalDeduct } : stock;
     });
     saveWorkshopStock(updated);
   }
@@ -630,7 +632,7 @@ function ServiceEntryTab({ employee, onSubmit }: { employee: string; onSubmit: (
       const totalDeduct = bulkEntries
         .filter((entry) => productIdForName(entry.product) === tank.productId)
         .reduce((sum, entry) => sum + entry.litres, 0);
-      return totalDeduct ? { ...tank, currentLitres: Math.max(0, tank.currentLitres - totalDeduct), expectedLitres: Math.max(0, (tank.expectedLitres ?? tank.currentLitres) - totalDeduct) } : tank;
+      return totalDeduct ? { ...tank, currentLitres: Math.max(0, tank.currentLitres - totalDeduct), expectedLitres: (tank.expectedLitres ?? tank.currentLitres) - totalDeduct } : tank;
     });
     saveBulkTanks(updated);
   }
@@ -891,78 +893,22 @@ function RefillsTab({ onSubmit }: { onSubmit: () => void }) {
   }
 
   function submitRefill() {
-    const entries = compartments
-      .map((group) => ({ group, refill: draft[group.name] }))
-      .filter(({ refill }) => refill && refill.litres > 0);
-
-    if (!entries.length) {
-      alert("Enter litres added for at least one compartment.");
-      return;
-    }
-    const missingSource = entries.find(({ group }) => !matchingBulkTank(group));
-    if (missingSource) {
-      alert(`No matching bulk tank found for this product: ${missingSource.group.name}.`);
-      return;
-    }
-    const insufficient = entries.find(({ group, refill }) => {
-      const source = matchingBulkTank(group);
-      return source ? source.currentLitres < refill.litres : false;
-    });
-    if (insufficient) {
-      alert(`Bulk tank has insufficient stock for ${insufficient.group.name}.`);
-      return;
-    }
-    const overfills = entries.filter(({ group, refill }) => group.current + refill.litres > group.capacity);
-    if (overfills.length) { alert("The refill exceeds compartment capacity. Reduce the litres before saving."); return; }
-
-    if (targetType === "Service Truck" && selectedTruck) {
-      const updated = trucks.map((truck) => {
-        if (truck.truckId !== selectedTruck.truckId) return truck;
-        return {
-          ...truck,
-          oilGroups: truck.oilGroups.map((group) => {
-            const refill = draft[group.name];
-            if (!refill?.litres) return group;
-            return { ...group, current: Math.min(group.capacity, group.current + refill.litres) };
-          }),
-          lastRefill: new Date().toLocaleDateString(),
-        };
-      });
-      setTrucks(updated);
-      saveServiceTrucks(updated);
-    } else {
-          const nextWorkshopLevels = workshopLevels.map((group) => {
-          const refill = draft[group.name];
-          if (!refill?.litres) return group;
-          const current = Math.min(group.capacity, group.current + refill.litres);
-          const expectedLitres = Math.min(group.capacity, (group.expectedLitres ?? group.current) + refill.litres);
-          return { ...group, current, expectedLitres };
-          });
-          saveWorkshopStock(nextWorkshopLevels.map((group) => ({
-            id: group.id ?? `workshop-${productIdForName(group.name)}`,
-            productId: group.productId ?? productIdForName(group.name),
-            name: group.name,
-            current: group.current,
-            expectedLitres: group.expectedLitres,
-            capacity: group.capacity,
-            tone: group.tone === "green" ? "green" : "yellow",
-          })));
-          setWorkshopLevels(nextWorkshopLevels);
-    }
-
-    const updatedBulkTanks = bulkTanks.map((tank) => {
-      const totalDeduct = entries
-        .filter(({ group }) => matchingBulkTank(group)?.id === tank.id)
-        .reduce((sum, { refill }) => sum + refill.litres, 0);
-      return totalDeduct ? { ...tank, currentLitres: tank.currentLitres - totalDeduct, expectedLitres: Math.max(0, (tank.expectedLitres ?? tank.currentLitres) - totalDeduct) } : tank;
-    });
-    setBulkTanks(updatedBulkTanks);
-    saveBulkTanks(updatedBulkTanks);
-
-    setDraft({});
-    onSubmit();
+    try {
+      const entries = compartments.map(group => ({ group, litres: draft[group.name]?.litres ?? 0 })).filter(item => item.litres !== 0);
+      if (!entries.length) throw new Error("Enter litres added for at least one compartment.");
+      let next = loadSiteStock();
+      for (const { group, litres } of entries) {
+        const sources = loadBulkTanks().filter(tank => tank.productId === getProductId(group));
+        if (sources.length !== 1) throw new Error(`Select the source for ${group.name} in Site Oil Storage; one matching bulk tank is required here.`);
+        const index = selectedTruck?.oilGroups.findIndex(item => item.name === group.name) ?? -1;
+        const destination = targetType === "Service Truck" ? `truck:${selectedTruck?.truckId}:${selectedTruck?.oilGroups[index]?.id ?? selectedTruck?.oilGroups[index]?.name}` : `workshop:${group.id}`;
+        next = applyStockOperation(next, { kind: "transfer", source: `bulk:${sources[0].id}`, destination, litres });
+      }
+      saveSiteStock(next);
+      setTrucks(loadServiceTrucks()); setBulkTanks(loadBulkTanks()); setWorkshopLevels(workshopProductsFromStore());
+      setDraft({}); onSubmit();
+    } catch (error) { alert(error instanceof Error ? error.message : "Could not record refill."); }
   }
-
   return (
     <div className="employee-form">
       <h2>Refills</h2>

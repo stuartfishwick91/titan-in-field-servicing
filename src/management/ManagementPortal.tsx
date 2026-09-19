@@ -18,6 +18,7 @@ import { useBranding } from "../branding/BrandingContext";
 import { canAccessManagementPath, clearCurrentUser, loadCurrentUser, loadUsers, rolePermissions, setCurrentUser, type ManagedUser } from "../data/userAccessStore";
 import { LoginScreen } from "../branding/LoginScreen";
 import { Dashboard } from "./screens/Dashboard";
+import { SiteOilStorage } from "./screens/SiteOilStorage";
 import { LiveFuelStatus } from "./screens/LiveFuelStatus";
 import {
   Branding,
@@ -154,7 +155,8 @@ export function ManagementPortal() {
             <>
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="live-fuel-status" element={<LiveFuelStatus />} />
-              <Route path="bulk-storage" element={<BulkStorage />} />
+              <Route path="bulk-storage" element={<SiteOilStorage />} />
+              <Route path="bulk-tanks" element={<BulkStorage />} />
               <Route path="workshop-storage" element={<WorkshopStorage />} />
               <Route path="service-trucks" element={<ServiceTrucks />} />
               <Route path="fleet-management" element={<FleetManagement />} />

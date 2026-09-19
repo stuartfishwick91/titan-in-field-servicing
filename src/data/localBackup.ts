@@ -5,6 +5,7 @@ const operationalKeys = [
   "titan-system-alert-settings-v1", "titan-branding-settings-v1",
   "titan-daily-fuel-sheet-export-history-v1", "titan-employee-assigned-truck",
   "titan-daily-fuel-submitted-at", "titan-supervisor-message-read",
+  "titan-site-facilities-v1", "titan-site-stock-audit-v1",
 ];
 
 export function createLocalBackup(storage: Pick<Storage, "getItem">, now = new Date()) {

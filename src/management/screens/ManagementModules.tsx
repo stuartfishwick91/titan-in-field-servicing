@@ -1,4 +1,6 @@
 import { readSharedItem, writeSharedItem } from "../../cloud/sharedStorage";
+import { loadSiteStock, saveSiteStock } from "../../data/siteInventory";
+import { applyStockOperation } from "../../data/siteInventoryModel";
 import { Bell, Download, Droplets, Edit2, FileText, Plus, Printer, QrCode, Save, Upload, UserRound } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
@@ -118,10 +120,7 @@ export function BulkStorage() {
   const [selectedTankName, setSelectedTankName] = useState<string | null>(null);
   const [adjustmentRegister, setAdjustmentRegister] = useState<StockAdjustmentRegisterEntry[]>(loadStockAdjustmentRegister);
   const tankDetailRef = useRef<HTMLDivElement | null>(null);
-  const [bulkHistory, setBulkHistory] = useState([
-    ["26 Jun 2026 06:20", "Engine Oil 15W-40", "Delivery", "Fuel Farm", "3,600 L", "Admin User"],
-    ["26 Jun 2026 07:10", "Hydraulic Oil 46", "Tank Dip", "Bulk Storage", "-60 L", "Admin User"],
-  ]);
+  const [bulkHistory, setBulkHistory] = useState<string[][]>([]);
   const selectedTank = bulkStorageLevels.find((tank) => tank.name === selectedTankName) ?? null;
   const newBulkTank: LocalTank = { name: `New Oil Compartment ${bulkStorageLevels.length + 1}`, oilType: "New Oil Type", percent: 0, current: 0, expected: 0, capacity: 1000, lowAlert: 30, tone: "yellow", supplier: "Supplier", sku: "SKU" };
 
@@ -175,7 +174,7 @@ export function BulkStorage() {
     const percent = Math.round((updated.current / updated.capacity) * 100);
     const previousTank = bulkStorageLevels.find((item) => item.name === selectedTankName);
     setBulkStorageLevels((items) => {
-      const expected = note === "Tank Edit" ? updated.current : updated.expected ?? updated.current;
+      const expected = note === "Tank Edit" ? previousTank?.expected ?? updated.current : updated.expected ?? updated.current;
       const nextTank = { ...updated, expected, percent };
       return items.some((item) => item.name === selectedTankName)
         ? items.map((item) => item.name === selectedTankName ? nextTank : item)
@@ -388,6 +387,7 @@ function TankDetailPanel({
   }, [tank.name, tank.current, tank.capacity, tank.expected]);
 
   function saveDip() {
+    if (!Number.isFinite(dipLitres) || dipLitres < 0 || dipLitres > tank.capacity) { alert("Enter measured stock between zero and capacity."); return; }
     const nextTank = { ...tank, current: dipLitres };
     if (dipLitres !== tank.current) {
       setPendingAdjustment({ note: "Tank Dip", nextTank });
@@ -397,7 +397,8 @@ function TankDetailPanel({
   }
 
   function saveDelivery() {
-    onSave({ ...tank, current: Math.min(tank.capacity, tank.current + deliveryLitres), expected: Math.min(tank.capacity, tank.expected + deliveryLitres) }, "Delivery");
+    if (!Number.isFinite(deliveryLitres) || deliveryLitres <= 0 || tank.current + deliveryLitres > tank.capacity) { alert("Enter positive litres within the available tank capacity."); return; }
+    onSave({ ...tank, current: tank.current + deliveryLitres, expected: tank.expected + deliveryLitres }, "Delivery");
   }
 
   function saveEdit() {
@@ -496,11 +497,7 @@ export function WorkshopStorage() {
   const [dipLitres, setDipLitres] = useState(workshopLevels[0]?.current ?? 0);
   const [refillDraft, setRefillDraft] = useState({ product: workshopLevels[0].name, litres: 250, source: "Engine Oil 15W-40", employee: "Admin User" });
   const workshopDetailRef = useRef<HTMLDivElement | null>(null);
-  const [refillHistory, setRefillHistory] = useState<Array<Array<string>>>([
-    ["02 Jul 2026 08:47", "Diesel", "Fuel Farm", "ST-12", "1,600 L", "Alicia Brown"],
-    ["02 Jul 2026 07:51", "15W-40", "Bulk 15W-40", "Workshop", "240 L", "Stuart Fishwick"],
-    ["01 Jul 2026 16:20", "Hydraulic 68", "Bulk Hydraulic 68", "ST-07", "380 L", "Mark Chen"],
-  ]);
+  const [refillHistory, setRefillHistory] = useState<string[][]>([]);
   const newWorkshopCompartment: WorkshopStockRecord = { id: `workshop-new-${Date.now()}`, productId: "new-oil", name: `Workshop New Oil ${workshopLevels.length + 1}`, current: 0, expectedLitres: 0, capacity: 1000, tone: "yellow" };
 
   useEffect(() => {
@@ -545,7 +542,7 @@ export function WorkshopStorage() {
     setWorkshopLevels((items) =>
       items.some((item) => item.name === editingWorkshopName)
         ? items.map((item) =>
-          item.name === editingWorkshopName ? { ...draft, productId: productIdForName(draft.name), expectedLitres: draft.current } : item,
+          item.name === editingWorkshopName ? { ...draft, productId: productIdForName(draft.name), expectedLitres: item.expectedLitres ?? item.current } : item,
         )
         : [...items, { ...draft, productId: productIdForName(draft.name), expectedLitres: draft.current }],
     );
@@ -641,13 +638,12 @@ export function WorkshopStorage() {
   }
 
   function saveWorkshopRefill() {
-    setWorkshopLevels((items) =>
-      items.map((item) => {
-        if (item.name !== refillDraft.product) return item;
-        const current = Math.min(item.capacity, item.current + refillDraft.litres);
-        return { ...item, current, expectedLitres: Math.min(item.capacity, (item.expectedLitres ?? item.current) + refillDraft.litres) };
-      }),
-    );
+    try {
+      const source = loadBulkTanks().find(item => item.name === refillDraft.source);
+      const destination = loadWorkshopStock().find(item => item.name === refillDraft.product);
+      if (!source || !destination) throw new Error("Select the source bulk tank and workshop compartment.");
+      saveSiteStock(applyStockOperation(loadSiteStock(), { kind: "transfer", source: `bulk:${source.id}`, destination: `workshop:${destination.id}`, litres: refillDraft.litres }));
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Could not record refill."); return; }
     setRefillHistory((items) => [[new Date().toLocaleString(), refillDraft.product, refillDraft.source, "Workshop", `${refillDraft.litres.toLocaleString()} L`, refillDraft.employee], ...items]);
     setRefilling(false);
     setMessage(`${refillDraft.product} refill recorded.`);
@@ -919,13 +915,13 @@ export function ServiceTrucks() {
   }
 
   function saveRefill() {
-    setTrucks(trucks.map((truck) => truck.truckId === selectedTruckId ? {
-      ...truck,
-      oilGroups: truck.oilGroups.map((group) => {
-        if (group.name !== refillDraft.group) return group;
-        return { ...group, current: Math.min(group.capacity, group.current + refillDraft.litres) };
-      }),
-    } : truck));
+    try {
+      const source = loadBulkTanks().find(item => refillDraft.source === "Fuel Farm" ? item.productId === "diesel" : item.name === refillDraft.source);
+      const truck = loadServiceTrucks().find(item => item.truckId === selectedTruck?.truckId);
+      const index = truck?.oilGroups.findIndex(item => item.name === refillDraft.group) ?? -1;
+      if (!source || !truck || index < 0) throw new Error("Select the source bulk tank and truck compartment.");
+      saveSiteStock(applyStockOperation(loadSiteStock(), { kind: "transfer", source: `bulk:${source.id}`, destination: `truck:${truck.truckId}:${truck.oilGroups[index].id ?? truck.oilGroups[index].name}`, litres: refillDraft.litres }));
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Could not record refill."); return; }
     setMessage(`${refillDraft.litres.toLocaleString()} L added to ${refillDraft.group} from ${refillDraft.source}.`);
     setAction(null);
   }
@@ -1090,7 +1086,7 @@ export function ServiceTrucks() {
                 <>
                   <div className="settings-grid">
                     <label>Oil group<select value={refillDraft.group} onChange={(event) => setRefillDraft({ ...refillDraft, group: event.target.value })}>{truckOilGroups.map((group) => <option key={group.name}>{group.name}</option>)}</select></label>
-                    <label>Source bulk tank<select value={refillDraft.source} onChange={(event) => setRefillDraft({ ...refillDraft, source: event.target.value })}><option>Fuel Farm</option><option>Engine Oil 15W-40</option><option>Hydraulic Oil 46</option></select></label>
+                    <label>Source bulk tank<select value={refillDraft.source} onChange={(event) => setRefillDraft({ ...refillDraft, source: event.target.value })}><option value="Fuel Farm">Fuel Farm (diesel)</option>{loadBulkTanks().map(tank => <option key={tank.id}>{tank.name}</option>)}</select></label>
                     <label>Litres added<input type="number" value={refillDraft.litres} onChange={(event) => setRefillDraft({ ...refillDraft, litres: Number(event.target.value) })} /></label>
                   </div>
                   <div className="button-row detail-actions"><button className="primary-button" type="button" onClick={saveRefill}><Save size={18} /> Save Refill</button><button className="secondary-button" type="button" onClick={() => setAction(null)}>Cancel</button></div>

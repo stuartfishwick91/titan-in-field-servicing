@@ -6,6 +6,7 @@ export type ServiceTruckOilGroup = {
   system: string;
   capacity: number;
   current: number;
+  expectedLitres?: number;
   tone: "green" | "yellow";
 };
 
@@ -87,7 +88,7 @@ export const defaultServiceTrucks: ServiceTruckRecord[] = [
 
 function normaliseServiceTrucks(trucks: ServiceTruckRecord[]) {
   const seen = new Set<string>();
-  return trucks.filter((truck) => {
+  return trucks.map(truck => ({ ...truck, oilGroups: truck.oilGroups.map(group => ({ ...group, expectedLitres: group.expectedLitres ?? group.current })) })).filter((truck) => {
     if (seen.has(truck.truckId)) return false;
     seen.add(truck.truckId);
     return true;
@@ -97,12 +98,12 @@ function normaliseServiceTrucks(trucks: ServiceTruckRecord[]) {
 export function loadServiceTrucks() {
   try {
     const stored = readSharedItem(SERVICE_TRUCKS_STORAGE_KEY);
-    if (!stored) return defaultServiceTrucks;
+    if (!stored) return normaliseServiceTrucks(defaultServiceTrucks);
     const parsed = JSON.parse(stored) as ServiceTruckRecord[];
     const normalised = normaliseServiceTrucks(parsed);
     return normalised;
   } catch {
-    return defaultServiceTrucks;
+    return normaliseServiceTrucks(defaultServiceTrucks);
   }
 }
 

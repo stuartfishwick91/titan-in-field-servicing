@@ -6,6 +6,8 @@ import { LocalBackupButton } from "../data/LocalBackupButton";
 import { defaultUsers } from "../data/userAccessStore";
 import { supabase } from "./client";
 import { setCloudIdentity } from "./identity";
+import { cloudIdentity } from "./identity";
+import { withStockAudit } from "../data/siteInventory";
 import { closeSharedDocuments, copySharedDocuments, readDeviceDocuments, useSharedDocuments } from "./sharedStorage";
 import { SyncEngine, type Documents, type Pending, type Snapshot, type Transport } from "./syncEngine";
 
@@ -90,7 +92,9 @@ export function CloudGate({ children }: { children: ReactNode }) {
       scheduled.current = false;
       try {
         if (!engine.current) throw new Error("The shared trial is not ready.");
-        engine.current.stage(copySharedDocuments(), crypto.randomUUID());
+        const operationId = crypto.randomUUID();
+        const candidate = withStockAudit(engine.current.snapshot.documents, copySharedDocuments(), cloudIdentity()?.fullName ?? "Administrator", operationId);
+        engine.current.stage(candidate, operationId);
         void save();
       } catch (e) {
         setSaveError(errorText(e)); setBusy(false); busyRef.current = false;

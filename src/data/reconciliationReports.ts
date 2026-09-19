@@ -1,3 +1,4 @@
+import { loadSiteStock } from "./siteInventory";
 import { loadBulkTanks, productIdForName, type BulkTankRecord } from "./bulkTankStore";
 import { loadFuelSubmissions } from "./fuelSubmissionStore";
 import { loadServiceEntries } from "./serviceEntryStore";
@@ -8,7 +9,7 @@ import { loadUsers } from "./userAccessStore";
 import { loadWorkshopStock, type WorkshopStockRecord } from "./workshopStore";
 
 export type ReconciliationItem = {
-  area: "Bulk Storage" | "Workshop Storage";
+  area: "Bulk Storage" | "Workshop Storage" | "Service Trucks" | "Field" | "Light Vehicles";
   productId: string;
   product: string;
   opening: number;
@@ -135,29 +136,11 @@ function workshopMovementForTank(tank: WorkshopStockRecord) {
 }
 
 export function buildDailyReconciliation() {
-  const bulkItems = loadBulkTanks().map((tank) => {
-    const movement = bulkMovementForTank(tank);
-    return buildItem(
-      "Bulk Storage",
-      tank.productId,
-      tank.name,
-      movement.opening,
-      movement.deliveries,
-      movement.serviceTruckRefills,
-      0,
-      movement.employeeUsage,
-      movement.actual,
-    );
-  });
-
-  const workshopItems = loadWorkshopStock().map((tank) => {
-    const movement = workshopMovementForTank(tank);
-    return buildItem("Workshop Storage", tank.productId, tank.name, movement.opening, movement.deliveries, movement.refills, movement.transfers, movement.employeeUsage, movement.actual);
-  });
-
-  return [...bulkItems, ...workshopItems];
+  return loadSiteStock().map(row => buildItem(
+    row.department === "Workshop" ? "Workshop Storage" : row.department,
+    row.productId, row.name, row.expected, 0, 0, 0, 0, row.current,
+  ));
 }
-
 export function buildDailyFuelSheetRows(): FuelSheetRow[] {
   const assetDetails = new Map(loadAssets().map((asset) => [asset.assetNumber.toLowerCase(), asset]));
   const latestServiceEntryByAsset = new Map(
