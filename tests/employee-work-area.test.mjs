@@ -10,7 +10,7 @@ const rows = [
 ];
 test('work area navigation stays focused and respects schedule access', () => {
   assert.deepEqual(workAreaTabs('Fuel Farm',true),['home','fuelFarm','daily']);
-  for (const area of ['Workshop','Field']) assert.deepEqual(workAreaTabs(area,true),['home','service','refills','daily']);
+  for (const area of ['Workshop','Field']) assert.deepEqual(workAreaTabs(area,true),['home','service','refills']);
   assert.deepEqual(workAreaTabs('Service Truck',true),['home','service','fuelSchedule','refills','daily']);
   assert.equal(workAreaTabs('Service Truck',false).includes('fuelSchedule'),false);
   assert.equal(areaOilSource('Field'),'Field Storage');

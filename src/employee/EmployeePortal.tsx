@@ -269,7 +269,7 @@ function HomeTab({
         </section>
       )}
 
-      <section className="employee-home-card">
+      {(workArea === "Fuel Farm" || workArea === "Service Truck") && <section className="employee-home-card">
         <div className="employee-card-head">
           <div>
             <strong>End of Shift Status</strong>
@@ -287,7 +287,7 @@ function HomeTab({
           <Send size={18} />
           {dailySubmitted ? "Daily Fuel Ups Submitted" : "Submit Daily Fuel Ups"}
         </button>
-      </section>
+      </section>}
 
       {showTruckDetails && (
         <section className="employee-modal-panel">
@@ -501,6 +501,7 @@ function ServiceEntryTab({ employee, workArea, onSubmit }: { employee: string; w
   const [oilSource, setOilSource] = useState<OilSource>(areaOilSource(workArea));
   const [oilDraft, setOilDraft] = useState<OilDraft>({});
   const [generalComments, setGeneralComments] = useState("");
+  const [workOrder, setWorkOrder] = useState("");
   const [localMessage, setLocalMessage] = useState("");
   const [assignedTruckId, setAssignedTruckId] = useState(localStorage.getItem("titan-employee-assigned-truck") ?? loadCurrentUser()?.assignedServiceTruckId ?? "");
   const assignedTruck = trucks.find((truck) => truck.truckId === assignedTruckId);
@@ -561,6 +562,7 @@ function ServiceEntryTab({ employee, workArea, onSubmit }: { employee: string; w
       return;
     }
     setLoadedAsset(asset);
+    setWorkOrder("");
     setManualAsset(asset.assetNumber);
     setCurrentSmu(String(lastSmuByAsset[asset.assetNumber] ?? ""));
     setOilDraft({});
@@ -627,6 +629,7 @@ function ServiceEntryTab({ employee, workArea, onSubmit }: { employee: string; w
       shift: currentFuelShift(),
       employee,
       assetNumber: loadedAsset.assetNumber,
+      workOrder: workArea === "Workshop" || workArea === "Field" ? workOrder.trim() : undefined,
       make: loadedAsset.make,
       model: loadedAsset.model,
       type: loadedAsset.type,
@@ -643,7 +646,7 @@ function ServiceEntryTab({ employee, workArea, onSubmit }: { employee: string; w
         comments: draft.comments,
       })),
       comments: generalComments,
-      submitted: false,
+      submitted: workArea === "Workshop" || workArea === "Field",
     };
     saveServiceEntries([serviceEntry, ...loadServiceEntries()]);
 
@@ -660,7 +663,7 @@ function ServiceEntryTab({ employee, workArea, onSubmit }: { employee: string; w
           litres: fuelLitres,
           fuelSource: resolvedFuelSource,
           submitted: false,
-          locked: false,
+          locked: workArea === "Workshop" || workArea === "Field",
         },
         ...fuelEntries,
       ]);
@@ -670,6 +673,7 @@ function ServiceEntryTab({ employee, workArea, onSubmit }: { employee: string; w
     saveSiteStock(nextStock);
 
     setLoadedAsset(null);
+    setWorkOrder("");
     setManualAsset("");
     setCurrentSmu("");
     setFuelAdded("");
@@ -708,6 +712,7 @@ function ServiceEntryTab({ employee, workArea, onSubmit }: { employee: string; w
               <div><dt>Last SMU</dt><dd>{lastSmu.toLocaleString()}</dd></div>
             </dl>
           </section>
+          {(workArea === "Workshop" || workArea === "Field") && <label>Work Order Number<input value={workOrder} onChange={event => setWorkOrder(event.target.value)} placeholder="Enter work order number" /></label>}
           <label>Current SMU *
             <input inputMode="numeric" type="number" value={currentSmu} onChange={(event) => setCurrentSmu(event.target.value)} />
           </label>
@@ -967,6 +972,7 @@ function DailySheetTab({ employee, onSend }: { employee: string; onSend: () => v
               <span>SMU {entry.smu.toLocaleString()} - Fuel {entry.fuelAdded.toLocaleString()} L - {entry.fuelSource}</span>
               <span>{entry.oils.map((oil) => `${oil.product}: ${oil.litres} L`).join(", ") || "No oils added"}</span>
               <span>{entry.comments || "No comments"}</span>
+              {entry.workOrder && <span>Work Order: {entry.workOrder}</span>}
               <em>{entry.submitted ? "Submitted" : "Not Submitted"}</em>
             </article>
           );

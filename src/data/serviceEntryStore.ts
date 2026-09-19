@@ -15,6 +15,7 @@ export type ServiceEntryRecord = {
   shift?: "Day Shift" | "Night Shift";
   employee: string;
   assetNumber: string;
+  workOrder?: string;
   make: string;
   model: string;
   type: string;

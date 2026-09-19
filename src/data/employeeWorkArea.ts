@@ -5,7 +5,8 @@ export const workAreas: WorkArea[] = ["Fuel Farm", "Workshop", "Field", "Service
 export function workAreaTabs(area: WorkArea, fuelSchedule: boolean) {
   if (area === "Fuel Farm") return ["home", "fuelFarm", "daily"] as const;
   if (area === "Service Truck" && fuelSchedule) return ["home", "service", "fuelSchedule", "refills", "daily"] as const;
-  return ["home", "service", "refills", "daily"] as const;
+  if (area === "Service Truck") return ["home", "service", "refills", "daily"] as const;
+  return ["home", "service", "refills"] as const;
 }
 export function areaOilSource(area: WorkArea) {
   return area === "Service Truck" ? "Service Truck Storage" : area === "Field" ? "Field Storage" : area === "Fuel Farm" ? "Bulk Storage" : "Workshop Storage";
