@@ -6,6 +6,8 @@ import { useNavigate } from "react-router-dom";
 import { LoginScreen } from "../branding/LoginScreen";
 import { LocalBackupButton } from "../data/LocalBackupButton";
 import { FuelFarmEntryTab } from "./FuelFarmEntryTab";
+import { AssetQrScanner } from "./AssetQrScanner";
+import { resolveAssetQr } from "../data/assetQr";
 import { useBranding } from "../branding/BrandingContext";
 import { loadFuelSubmissions, saveFuelSubmissions } from "../data/fuelSubmissionStore";
 import { loadServiceTrucks, saveServiceTrucks, type ServiceTruckOilGroup } from "../data/serviceTruckStore";
@@ -472,6 +474,7 @@ const lastSmuByAsset: Record<string, number> = {
 };
 
 function ServiceEntryTab({ employee, onSubmit }: { employee: string; onSubmit: () => void }) {
+  const [scanning, setScanning] = useState(false);
   const [assets, setAssets] = useState(loadAssets);
   const [trucks, setTrucks] = useState(loadServiceTrucks);
   const [manualAsset, setManualAsset] = useState("");
@@ -535,7 +538,7 @@ function ServiceEntryTab({ employee, onSubmit }: { employee: string; onSubmit: (
   }, []);
 
   function loadAsset(assetNumber: string) {
-    const asset = assets.find((item) => item.assetNumber.toLowerCase() === assetNumber.trim().toLowerCase());
+    const asset = loadAssets().find((item) => item.assetNumber.toLowerCase() === assetNumber.trim().toLowerCase());
     if (!asset) {
       setLocalMessage("Asset not found. Check the asset number and try again.");
       setLoadedAsset(null);
@@ -550,7 +553,7 @@ function ServiceEntryTab({ employee, onSubmit }: { employee: string; onSubmit: (
   }
 
   function scanAsset() {
-    loadAsset("RD4830");
+    setScanning(true);
   }
 
   function updateOil(id: string, patch: Partial<{ litres: number; source: OilSource; comments: string }>) {
@@ -751,6 +754,12 @@ function ServiceEntryTab({ employee, onSubmit }: { employee: string; onSubmit: (
       <h2>Service Entry</h2>
       {localMessage && <p className="success-banner">{localMessage}</p>}
       <button className="primary-button wide-button scan-asset-button" type="button" onClick={scanAsset}><QrCode size={18} /> Scan QR Asset</button>
+      {scanning && <AssetQrScanner onClose={() => setScanning(false)} onScan={payload => {
+        const asset = resolveAssetQr(payload, loadAssets());
+        loadAsset(asset.assetNumber);
+        setScanning(false);
+        window.dispatchEvent(new Event("titan-cloud-form-edited"));
+      }} />}
       <div className="load-asset-row">
         <label>Asset Number<input value={manualAsset} onChange={(event) => setManualAsset(event.target.value)} placeholder="Enter asset number" /></label>
         <button className="secondary-button" type="button" onClick={() => loadAsset(manualAsset)}>Load Asset</button>
