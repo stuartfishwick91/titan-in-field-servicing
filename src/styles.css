@@ -3777,3 +3777,4 @@ th {
 .site-storage-shortage { color: #ffbd66; }
 .site-storage-details { margin: 14px 0 24px; }
 .site-storage-details summary { cursor: pointer; color: var(--yellow); padding: 10px 0; }
+.site-compartment-actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 14px 0; }

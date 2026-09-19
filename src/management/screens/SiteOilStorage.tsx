@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type FormEvent } from "react";
+import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { applyStockOperation, departments, summarizeSiteStock, movementKind, type Department, type StockOperation } from "../../data/siteInventoryModel";
 import { loadFacilities, loadSiteStock, loadStockAudit, saveFacilities, saveSiteStock } from "../../data/siteInventory";
@@ -6,7 +6,7 @@ import { loadFacilities, loadSiteStock, loadStockAudit, saveFacilities, saveSite
 const litresText = (value: number) => `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })} L`;
 const productName = (value: string) => ({ "engine-15w40": "Engine Oil 15W-40", "hydraulic-46": "Hydraulic Oil 46", "hydraulic-32": "Hydraulic Oil 32", transmission: "Transmission Oil", diesel: "Diesel", coolant: "Coolant", "waste-oil": "Waste Oil" }[value] ?? value);
 
-function StorageCard({ name, location, current, capacity, expected, shortage, surplus }: { name: string; location: string; current: number; capacity: number; expected: number; shortage: number; surplus: number }) {
+function StorageCard({ name, location, current, capacity, expected, shortage, surplus, children }: { name: string; location: string; current: number; capacity: number; expected: number; shortage: number; surplus: number; children?: ReactNode }) {
   const percent = capacity > 0 ? current / capacity * 100 : null;
   return <article className="bulk-level-card site-storage-card">
     <span className="site-storage-location">{location}</span><h3>{name}</h3>
@@ -20,6 +20,7 @@ function StorageCard({ name, location, current, capacity, expected, shortage, su
       <div className={shortage > 0 ? "site-storage-shortage" : ""}><dt>Shortage</dt><dd>{litresText(shortage)}</dd></div>
       <div><dt>Surplus</dt><dd>{litresText(surplus)}</dd></div>
     </dl>
+    {children}
   </article>;
 }
 
@@ -37,6 +38,7 @@ export function SiteOilStorage() {
   const [product, setProduct] = useState("engine-15w40");
   const [capacity, setCapacity] = useState("1000");
   const [opening, setOpening] = useState("0");
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [category, setCategory] = useState("Oils");
   useEffect(() => {
     const refresh = () => { setRows(loadSiteStock()); setHistory(loadStockAudit()); };
@@ -64,8 +66,13 @@ export function SiteOilStorage() {
       if (department !== "Field" && department !== "Light Vehicles") return;
       const cap = Number(capacity); const current = Number(opening);
       if (!name.trim() || !capacity.trim() || !opening.trim() || !Number.isFinite(cap) || cap <= 0 || !Number.isFinite(current) || current < 0 || current > cap) throw new Error("Enter a name, positive capacity and opening stock between zero and capacity.");
-      saveFacilities([...loadFacilities(), { id: crypto.randomUUID(), department, name: name.trim(), productId: product, capacity: cap, current, expected: current }]);
-      setName(""); setOpening("0"); setMessage("Compartment added with an opening stock balance.");
+      const facilities = loadFacilities();
+      const existing = facilities.find(row => row.id === editingId);
+      if (editingId && !existing) throw new Error("This compartment no longer exists. Refresh and try again.");
+      if (existing && product !== existing.productId && (existing.current !== 0 || existing.expected !== 0)) throw new Error("Transfer or reconcile the existing stock before changing its product.");
+      const updated = { id: editingId ?? crypto.randomUUID(), department, name: name.trim(), productId: product, capacity: cap, current, expected: existing?.expected ?? current };
+      saveFacilities(editingId ? facilities.map(row => row.id === editingId ? updated : row) : [...facilities, updated]);
+      setEditingId(null); setName(""); setOpening("0"); setMessage(existing ? "Compartment updated. Expected stock has been preserved." : "Compartment added with an opening stock balance.");
     } catch (e) { setError(e instanceof Error ? e.message : "Could not add compartment."); }
   }
 
@@ -73,7 +80,13 @@ export function SiteOilStorage() {
     <h1>Site Oil Storage</h1>
     <p>Linked stock across departments. Internal transfers preserve the site total; equipment usage reduces it. A dip changes recorded stock while expected stock remains available for comparison.</p>
     <div className="site-stock-tabs" role="tablist" aria-label="Storage departments">
-      {(["Site total", ...departments] as const).map(item => <button key={item} type="button" role="tab" aria-selected={department === item} onClick={() => setDepartment(item)}>{item}</button>)}
+      {(["Site total", ...departments] as const).map(item => <button key={item} type="button" role="tab" aria-selected={department === item} onClick={() => { setDepartment(item); setEditingId(null); setName(""); setOpening("0"); }}>{item === "Field" ? "Field Stock" : item}</button>)}
+    </div>
+    <div className="site-compartment-actions">
+      <Link className="secondary-button" to="/management/bulk-tanks">Add / edit / remove bulk compartments</Link>
+      <Link className="secondary-button" to="/management/workshop-storage">Manage workshop compartments</Link>
+      <Link className="secondary-button" to="/management/service-trucks">Manage truck compartments</Link>
+      {(department === "Field" || department === "Light Vehicles") && <a className="secondary-button" href="#facility-compartment-form" onClick={event => { event.preventDefault(); setEditingId(null); setName(""); setOpening("0"); document.getElementById("facility-compartment-form")?.scrollIntoView({ behavior: "smooth" }); }}>Add {department} compartment</a>}
     </div>
     <label>Products<select value={category} onChange={e => setCategory(e.target.value)}>{["Oils", "Fuel", "Coolant", "Waste Oil", "All products"].map(item => <option key={item}>{item}</option>)}</select></label>
     {error && <p role="alert" className="form-warning">{error}</p>}
@@ -92,7 +105,12 @@ export function SiteOilStorage() {
     </details>
     <h2>Department compartments</h2>
     <div className="site-storage-grid">
-      {visible.map(row => <StorageCard key={row.key} name={row.name} location={`${row.department} · ${productName(row.productId)}`} current={row.current} capacity={row.capacity} expected={row.expected} shortage={Math.max(0, row.expected - row.current)} surplus={Math.max(0, row.current - row.expected)} />)}
+      {visible.map(row => <StorageCard key={row.key} name={row.name} location={`${row.department} · ${productName(row.productId)}`} current={row.current} capacity={row.capacity} expected={row.expected} shortage={Math.max(0, row.expected - row.current)} surplus={Math.max(0, row.current - row.expected)}>
+        {row.department === "Field" || row.department === "Light Vehicles" ? <div className="site-compartment-actions">
+          <button type="button" onClick={() => { setDepartment(row.department); setEditingId(row.key.replace("facility:", "")); setName(row.name); setProduct(row.productId); setCapacity(String(row.capacity)); setOpening(String(row.current)); window.dispatchEvent(new Event("titan-cloud-form-edited")); requestAnimationFrame(() => document.getElementById("facility-compartment-form")?.scrollIntoView({ behavior: "smooth" })); }}>Edit compartment</button>
+          <button type="button" onClick={() => { const id = row.key.replace("facility:", ""); const current = loadFacilities().find(item => item.id === id); if (!current) return; if (current.current !== 0 || current.expected !== 0) { setError("Transfer or reconcile remaining stock before removing this compartment."); return; } if (confirm(`Remove ${row.name}?`)) { saveFacilities(loadFacilities().filter(item => item.id !== id)); setMessage("Compartment removed."); } }}>Remove</button>
+        </div> : <Link to={row.department === "Bulk Storage" ? "/management/bulk-tanks" : row.department === "Workshop" ? "/management/workshop-storage" : "/management/service-trucks"}>Edit / remove compartments</Link>}
+      </StorageCard>)}
     </div>
     <details className="site-storage-details"><summary>View compartment details as a table</summary>
     <div className="site-stock-table"><table><thead><tr><th>Department / location</th><th>Product</th><th>Stock</th><th>Expected</th><th>Difference (stock − expected)</th></tr></thead><tbody>
@@ -109,12 +127,13 @@ export function SiteOilStorage() {
         <button className="primary-button" type="submit">Record stock movement</button>
       </form>
     </section>
-    {(department === "Field" || department === "Light Vehicles") && <section className="original-panel"><h2>Add {department} compartment</h2><form className="settings-grid" onSubmit={addFacility}>
+    {(department === "Field" || department === "Light Vehicles") && <section id="facility-compartment-form" className="original-panel"><h2>{editingId ? "Edit" : "Add"} {department} compartment</h2><form className="settings-grid" onSubmit={addFacility}>
       <label>Compartment / location name<input required value={name} onChange={e => setName(e.target.value)} /></label>
       <label>Product<select value={product} onChange={e => setProduct(e.target.value)}>{productIds.map(id => <option key={id} value={id}>{productName(id)}</option>)}</select></label>
       <label>Capacity (L)<input required type="number" min="0.01" step="0.01" value={capacity} onChange={e => setCapacity(e.target.value)} /></label>
-      <label>Opening stock (L)<input required type="number" min="0" step="0.01" value={opening} onChange={e => setOpening(e.target.value)} /></label>
-      <button type="submit" className="primary-button">Add compartment</button>
+      <label>{editingId ? "Recorded stock (L)" : "Opening stock (L)"}<input required type="number" min="0" step="0.01" value={opening} onChange={e => setOpening(e.target.value)} /></label>
+      <button type="submit" className="primary-button">{editingId ? "Save compartment" : "Add compartment"}</button>
+      {editingId && <button type="button" onClick={() => { setEditingId(null); setName(""); setOpening("0"); }}>Cancel edit</button>}
     </form></section>}
     <h2>Recorded movement and discrepancy history</h2>
     <p>History starts with this update. Negative stock differences indicate unexplained shortages, which need investigation; they do not by themselves prove a loss.</p>
