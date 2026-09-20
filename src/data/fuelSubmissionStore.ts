@@ -8,6 +8,8 @@ export type FuelSubmissionEntry = {
   smu?: number;
   litres: number;
   fuelSource: string;
+  serviceEntryId?: string;
+  workOrder?: string;
   fuelTankId?: string;
   fuelTankName?: string;
   submitted: boolean;

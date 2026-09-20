@@ -1,3 +1,6 @@
+import { submissionHeaders, submissionReportRows, csvReport, submissionWorkbook } from "../../data/submissionReports";
+import { loadServiceEntries } from "../../data/serviceEntryStore";
+import { loadFuelSubmissions } from "../../data/fuelSubmissionStore";
 import { activityPeriod } from "../../data/dailyActivity";
 import { readSharedItem, writeSharedItem } from "../../cloud/sharedStorage";
 import { loadStockAudit, loadFacilities, saveFacilities, loadSiteStock, saveSiteStock } from "../../data/siteInventory";
@@ -1276,39 +1279,42 @@ function buildFuelSheetWorksheet(source: string, rows: ReturnType<typeof buildSu
       const assetRows = employeeRows.map((row) => `
         <Row>
           <Cell ss:StyleID="Cell"><Data ss:Type="String">${escapeHtml(row.assetNumber)}</Data></Cell>
+          <Cell ss:StyleID="Cell"><Data ss:Type="String">${escapeHtml(row.workOrder)}</Data></Cell>
           <Cell ss:StyleID="Cell"><Data ss:Type="${row.smuHours ? "Number" : "String"}">${row.smuHours || "-"}</Data></Cell>
           <Cell ss:StyleID="Cell"><Data ss:Type="Number">${row.fuelUsed}</Data></Cell>
         </Row>
       `).join("");
       return `
-        ${groupIndex ? '<Row><Cell ss:MergeAcross="2"><Data ss:Type="String"></Data></Cell></Row>' : ""}
-        <Row><Cell ss:StyleID="Subtitle" ss:MergeAcross="2"><Data ss:Type="String">Employee - ${escapeHtml(employee)}</Data></Cell></Row>
+        ${groupIndex ? '<Row><Cell ss:MergeAcross="3"><Data ss:Type="String"></Data></Cell></Row>' : ""}
+        <Row><Cell ss:StyleID="Subtitle" ss:MergeAcross="3"><Data ss:Type="String">Employee - ${escapeHtml(employee)}</Data></Cell></Row>
         <Row>
           <Cell ss:StyleID="Header"><Data ss:Type="String">Asset Number</Data></Cell>
+          <Cell ss:StyleID="Header"><Data ss:Type="String">Work Order</Data></Cell>
           <Cell ss:StyleID="Header"><Data ss:Type="String">SMU</Data></Cell>
           <Cell ss:StyleID="Header"><Data ss:Type="String">Fuel Used</Data></Cell>
         </Row>
         ${assetRows}
         <Row>
           <Cell ss:StyleID="Total"><Data ss:Type="String">Employee Total</Data></Cell>
-          <Cell ss:StyleID="Total"><Data ss:Type="String"></Data></Cell>
+          <Cell ss:StyleID="Total"><Data ss:Type="String"></Data></Cell><Cell ss:StyleID="Total"><Data ss:Type="String"></Data></Cell>
           <Cell ss:StyleID="Total"><Data ss:Type="Number">${employeeTotal}</Data></Cell>
         </Row>
       `;
     }).join("")
-    : '<Row><Cell ss:StyleID="Cell" ss:MergeAcross="2"><Data ss:Type="String">No submitted fuel sheets available.</Data></Cell></Row>';
+    : '<Row><Cell ss:StyleID="Cell" ss:MergeAcross="3"><Data ss:Type="String">No submitted fuel sheets available.</Data></Cell></Row>';
   return `
     <Worksheet ss:Name="${escapeHtml(safeWorksheetName(source))}">
       <Table>
         <Column ss:Width="150"/>
+        <Column ss:Width="130"/>
         <Column ss:Width="90"/>
         <Column ss:Width="110"/>
-        <Row><Cell ss:StyleID="Title" ss:MergeAcross="2"><Data ss:Type="String">Titan Safety Systems - Daily Fuel Sheet</Data></Cell></Row>
-        <Row><Cell ss:StyleID="Subtitle" ss:MergeAcross="2"><Data ss:Type="String">${escapeHtml(source)} - ${escapeHtml(date)}</Data></Cell></Row>
+        <Row><Cell ss:StyleID="Title" ss:MergeAcross="3"><Data ss:Type="String">Titan Safety Systems - Daily Fuel Sheet</Data></Cell></Row>
+        <Row><Cell ss:StyleID="Subtitle" ss:MergeAcross="3"><Data ss:Type="String">${escapeHtml(source)} - ${escapeHtml(date)}</Data></Cell></Row>
         ${dataRows}
         <Row>
           <Cell ss:StyleID="Total"><Data ss:Type="String">Total</Data></Cell>
-          <Cell ss:StyleID="Total"><Data ss:Type="String"></Data></Cell>
+          <Cell ss:StyleID="Total"><Data ss:Type="String"></Data></Cell><Cell ss:StyleID="Total"><Data ss:Type="String"></Data></Cell>
           <Cell ss:StyleID="Total"><Data ss:Type="Number">${totalFuel}</Data></Cell>
         </Row>
       </Table>
@@ -2296,6 +2302,7 @@ export function Reports() {
     return [date, "Daily Fuel Sheet Report", shift, fuelSource, exportedAt, "Exported"];
   });
   const summary = buildDailySummary(summaryFilters.date, summaryFilters.shift);
+  const submissionRows = submissionReportRows(loadFuelSubmissions(), loadServiceEntries(), summaryFilters.date, summaryFilters.shift);
   const reportHistory = buildReportHistory().filter((report) => {
     const employeeMatch = filters.employee === "All" || report.employee === filters.employee;
     const assetMatch = !filters.asset || report.asset.toLowerCase().includes(filters.asset.toLowerCase()) || report.name.toLowerCase().includes(filters.asset.toLowerCase());
@@ -2343,8 +2350,8 @@ export function Reports() {
     });
     const sources = Array.from(groups.entries());
     const worksheets = sources.length
-      ? sources.map(([source, rows]) => buildFuelSheetWorksheet(source, rows, filters.date)).join("")
-      : buildFuelSheetWorksheet("No Submitted Sheets", [], filters.date);
+      ? sources.map(([source, rows]) => buildFuelSheetWorksheet(source, rows, dailyFuelFilters.date)).join("")
+      : buildFuelSheetWorksheet("No Submitted Sheets", [], dailyFuelFilters.date);
     const workbook = buildExcelWorkbook([worksheets]);
     downloadReport("daily-fuel-sheet.xls", workbook, "application/vnd.ms-excel;charset=utf-8");
     const exportedAt = new Date().toLocaleString();
@@ -2365,25 +2372,15 @@ export function Reports() {
   }
 
   function exportEmployeeSubmissionExcel() {
-    const headers = ["Employee", "Asset Number", "SMU", "Fuel Added", "Submission Time", "Status"];
-    const rows = fuelSheetRows.map((row) => [row.employee, row.assetNumber, row.smuHours || "-", row.fuelAdded, row.submissionTime, row.status]);
-    const workbook = buildExcelWorkbook([
-      buildSimpleReportWorksheet("Employee Submissions", "Titan Safety Systems - Employee Submission Report", filters.date, headers, rows),
-    ]);
-    downloadReport("employee-submission-report.xls", workbook, "application/vnd.ms-excel;charset=utf-8");
-    setMessage("Employee Submission Excel export generated.");
+    const workbook = submissionWorkbook(submissionRows, summaryFilters.date + " / " + summaryFilters.shift);
+    downloadReport("employee-submissions.xls", workbook, "application/vnd.ms-excel;charset=utf-8");
+    setMessage("Employee submissions exported with work orders for the selected summary period.");
   }
 
   function exportWorkshopUsageExcel() {
-    const headers = ["Product", "Expected", "Actual", "Difference", "Status", "Supervisor Notes"];
-    const rows = reconciliation
-      .filter((item) => item.area === "Workshop Storage")
-      .map((item) => [item.product, item.expected, item.actual, item.difference, item.status, item.supervisorNotes]);
-    const workbook = buildExcelWorkbook([
-      buildSimpleReportWorksheet("Workshop Usage", "Titan Safety Systems - Workshop Usage Report", filters.date, headers, rows),
-    ]);
-    downloadReport("workshop-usage-report.xls", workbook, "application/vnd.ms-excel;charset=utf-8");
-    setMessage("Workshop Usage Excel export generated.");
+    const rows = submissionReportRows(loadFuelSubmissions(), loadServiceEntries(), summaryFilters.date, summaryFilters.shift, "Workshop Storage");
+    const workbook = submissionWorkbook(rows, "Workshop Usage / " + summaryFilters.date + " / " + summaryFilters.shift);
+    downloadReport("workshop-usage.xls", workbook, "application/vnd.ms-excel;charset=utf-8");
   }
 
   function exportBulkTankUsageExcel() {
@@ -2399,22 +2396,20 @@ export function Reports() {
   }
 
   function exportPdf() {
-    const headers = ["Date", "Employee", "Asset", "Fuel Added (L)", "Status"];
-    const rows = fuelSheetRows.map((row) => [row.date, row.employee, row.assetNumber, row.fuelAdded, row.status]);
-    const htmlRows = [headers, ...rows].map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join("")}</tr>`).join("");
-    downloadReport("daily-fuel-sheet.html", `<h1>Daily Fuel Sheet</h1><table border="1" cellspacing="0" cellpadding="6">${htmlRows}</table>`, "text/html;charset=utf-8");
-    setMessage("PDF-ready report generated as printable HTML.");
+    const htmlRows = [submissionHeaders, ...submissionRows].map(row => '<tr>' + row.map(cell => '<td>' + escapeHtml(String(cell)) + '</td>').join('') + '</tr>').join('');
+    downloadReport("employee-submissions.html", '<h1>Employee Submissions</h1><p>' + escapeHtml(summaryFilters.date + " / " + summaryFilters.shift) + '</p><table border="1">' + htmlRows + '</table>', "text/html;charset=utf-8");
+    setMessage("Printable employee report downloaded. Open it and print to PDF.");
   }
 
   return (
-    <section className="module-page reports-centre">
+    <section className="module-page reports-centre" data-local-preference>
       <ModuleTitle
         kicker="Management"
         title="Reports"
         action={(
           <div className="button-row">
             <button className="secondary-button" type="button" onClick={exportCsv}><Download size={18} /> Export CSV</button>
-            <button className="secondary-button" type="button" onClick={exportPdf}><FileText size={18} /> Export to PDF</button>
+            <button className="secondary-button" type="button" onClick={exportPdf}><FileText size={18} /> Download Printable Submissions</button>
           </div>
         )}
       />
@@ -2443,6 +2438,13 @@ export function Reports() {
             <input
               type="date"
               value={dailyFuelFilters.dateIso}
+              onInput={event => {
+                const value = event.currentTarget.value;
+                if (!value) return;
+                const date = reportDateFromIso(value);
+                setDailyFuelFilters(previous => ({ ...previous, dateIso: value, date, fuelSource: "All" }));
+                setFilters(previous => ({ ...previous, date }));
+              }}
               onChange={(event) => {
                 const date = reportDateFromIso(event.target.value);
                 setDailyFuelFilters({ ...dailyFuelFilters, dateIso: event.target.value, date, fuelSource: "All" });
@@ -2479,8 +2481,8 @@ export function Reports() {
       <section className="report-grid">
         {[
           { name: "Daily Reconciliation Report", detail: "Download daily stock variance as Excel", action: exportDailyReconciliationExcel },
-          { name: "Employee Submission Report", detail: "Download employee submissions as Excel", action: exportEmployeeSubmissionExcel },
-          { name: "Workshop Usage Report", detail: "Download workshop usage as Excel", action: exportWorkshopUsageExcel },
+          { name: "Employee Submission Report", detail: "Fuel, oil-only services and work orders — uses Summary date and shift below", action: exportEmployeeSubmissionExcel },
+          { name: "Workshop Usage Report", detail: "Workshop entries and work orders — uses Summary date and shift below", action: exportWorkshopUsageExcel },
           { name: "Bulk Tank Usage Report", detail: "Download bulk tank usage as Excel", action: exportBulkTankUsageExcel },
         ].map((report) => (
             <article className="report-card" key={report.name}>
@@ -2548,6 +2550,10 @@ export function Reports() {
           <ReportMetric label="Employees Submitted" value={summary.employeesSubmitted.toString()} tone="good" />
           <ReportMetric label="Contributors Still to Submit" value={summary.employeesOutstanding.toString()} tone={summary.employeesOutstanding ? "warn" : "good"} />
         </div>
+        <h3>Employee submissions and work orders</h3>
+        <p>Uses the summary date and shift above. Fuel and oil appear on separate rows, so totals are not duplicated. Older entries without a saved work order remain blank.</p>
+        <div className="button-row"><button type="button" className="secondary-button" onClick={exportEmployeeSubmissionExcel}>Download Submissions Excel</button><button type="button" className="secondary-button" onClick={() => downloadReport("employee-submissions.csv", csvReport(submissionHeaders, submissionRows), "text/csv;charset=utf-8")}>Download Submissions CSV</button></div>
+        <DataTable headers={submissionHeaders} rows={submissionRows} emptyMessage="No fuel or service entries for this period." />
         <p>Submitted counts contributors whose saved entries in this period are all submitted. It does not infer attendance or missing employees.</p>
         <DataTable headers={["Time", "Activity", "Department", "Location", "Product", "Litres", "Recorded by"]} emptyMessage="No deliveries or refills recorded for this period." rows={summary.movements.map(row => [new Date(row.at).toLocaleTimeString("en-AU", { timeZone: "Australia/Brisbane" }), row.type, row.department, row.location, row.product, row.litres.toLocaleString(), row.employee])} />
       </section>
@@ -2558,8 +2564,8 @@ export function Reports() {
           <span>Submitted shift sheets only for the selected report period</span>
         </div>
         <DataTable
-          headers={["Fuel Source", "Employee", "Asset Number", "SMU", "Fuel Used"]}
-          rows={submittedFuelSheetRows.map((row) => [row.fuelSource, row.employee, row.assetNumber, row.smuHours ? row.smuHours.toLocaleString() : "-", `${row.fuelUsed.toLocaleString()} L`])}
+          headers={["Fuel Source", "Employee", "Asset Number", "Work Order", "SMU", "Fuel Used"]}
+          rows={submittedFuelSheetRows.map((row) => [row.fuelSource, row.employee, row.assetNumber, row.workOrder, row.smuHours ? row.smuHours.toLocaleString() : "-", `${row.fuelUsed.toLocaleString()} L`])}
           emptyMessage="No submitted fuel sheets found for the selected date, shift and source."
         />
       </section>

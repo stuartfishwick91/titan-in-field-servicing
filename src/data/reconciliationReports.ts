@@ -44,6 +44,7 @@ export type FuelSheetRow = {
 };
 
 export type DailyFuelSheetSummaryRow = {
+  workOrder: string;
   fuelSource: string;
   employee: string;
   assetNumber: string;
@@ -60,18 +61,12 @@ export function reportDateFromIso(value: string) {
 }
 
 function entryReportDate(entry: { date?: string }) {
-  return entry.date || today;
+  return entry.date || "Not recorded";
 }
 
 function resolveFuelSheetSource(source: string, employee: string) {
   if (source !== "Assigned Service Truck") return source || "Unassigned Source";
-  const userTruck = loadUsers().find((user) => user.fullName === employee)?.assignedServiceTruckId;
-  if (userTruck) return userTruck;
-  try {
-    return localStorage.getItem("titan-employee-assigned-truck") || "Assigned Service Truck";
-  } catch {
-    return "Assigned Service Truck";
-  }
+  return "Assigned Service Truck (not recorded)";
 }
 
 function varianceStatus(area: ReconciliationItem["area"], difference: number, expected: number): ReconciliationItem["status"] {
@@ -144,13 +139,11 @@ export function buildDailyReconciliation() {
 }
 export function buildDailyFuelSheetRows(): FuelSheetRow[] {
   const assetDetails = new Map(loadAssets().map((asset) => [asset.assetNumber.toLowerCase(), asset]));
-  const latestServiceEntryByAsset = new Map(
-    loadServiceEntries().map((entry) => [entry.assetNumber.toLowerCase(), entry]),
-  );
+  const serviceById = new Map(loadServiceEntries().map(entry => [entry.id, entry]));
   return loadFuelSubmissions().map((entry) => {
     const asset = assetDetails.get(entry.asset.toLowerCase());
-    const latestServiceEntry = latestServiceEntryByAsset.get(entry.asset.toLowerCase());
-    const oilUsage = latestServiceEntry?.oils ?? [];
+    const latestServiceEntry = entry.serviceEntryId ? serviceById.get(entry.serviceEntryId) : undefined;
+    const oilUsage: Array<{ product: string; litres: number }> = [];
     const oilTotalFor = (matcher: (product: string) => boolean) =>
       oilUsage.filter((oil) => matcher(oil.product)).reduce((sum, oil) => sum + oil.litres, 0);
     return {
@@ -159,7 +152,7 @@ export function buildDailyFuelSheetRows(): FuelSheetRow[] {
       assetNumber: entry.asset,
       make: asset?.make ?? "Unknown",
       model: asset?.model ?? "Unknown",
-      smuHours: latestServiceEntry?.smu ?? 0,
+      smuHours: entry.smu ?? latestServiceEntry?.smu ?? 0,
       fuelAdded: entry.litres,
       engineOil: oilTotalFor((product) => productIdForName(product) === "engine-15w40"),
       hydraulicOil: oilTotalFor((product) => productIdForName(product).startsWith("hydraulic")),
@@ -167,23 +160,21 @@ export function buildDailyFuelSheetRows(): FuelSheetRow[] {
       coolant: oilTotalFor((product) => productIdForName(product) === "coolant"),
       otherOils: oilTotalFor((product) => !["engine-15w40", "hydraulic-46", "hydraulic-32", "transmission", "coolant", "diesel"].includes(productIdForName(product))),
       comments: entry.locked ? "Submitted shift entry." : "Draft shift entry.",
-      submissionTime: entry.submitted ? entry.submittedAt ?? "17:42" : "-",
+      submissionTime: entry.submitted ? entry.submittedAt ?? "Not recorded" : "-",
       status: entry.submitted ? "Submitted" : "Not Submitted",
     };
   });
 }
 
 export function buildSubmittedDailyFuelSheetSummaryRows(filters: { date?: string; shift?: string; fuelSource?: string } = {}): DailyFuelSheetSummaryRow[] {
-  const latestServiceEntryByAsset = new Map(
-    loadServiceEntries().map((entry) => [entry.assetNumber.toLowerCase(), entry]),
-  );
+  const serviceById = new Map(loadServiceEntries().map(entry => [entry.id, entry]));
   const rowsBySourceAndAsset = new Map<string, DailyFuelSheetSummaryRow>();
 
   loadFuelSubmissions()
     .filter((entry) => {
       if (!entry.submitted) return false;
       const dateMatch = !filters.date || entryReportDate(entry) === filters.date;
-      const shiftMatch = !filters.shift || filters.shift === "All" || (entry.shift ?? "Day Shift") === filters.shift;
+      const shiftMatch = !filters.shift || filters.shift === "All" || entry.shift === filters.shift;
       const employee = entry.employee || "Unassigned Employee";
       const source = resolveFuelSheetSource(entry.fuelSource, employee);
       const sourceMatch = !filters.fuelSource || filters.fuelSource === "All" || source === filters.fuelSource;
@@ -193,10 +184,12 @@ export function buildSubmittedDailyFuelSheetSummaryRows(filters: { date?: string
       const assetKey = entry.asset.toLowerCase();
       const employee = entry.employee || "Unassigned Employee";
       const fuelSource = resolveFuelSheetSource(entry.fuelSource, employee);
-      const rowKey = `${fuelSource.toLowerCase()}-${employee.toLowerCase()}-${assetKey}`;
+      const workOrder = entry.workOrder ?? (entry.serviceEntryId ? serviceById.get(entry.serviceEntryId)?.workOrder : undefined) ?? "";
+      const rowKey = JSON.stringify([fuelSource.toLowerCase(), employee.toLowerCase(), assetKey, workOrder]);
       const current = rowsBySourceAndAsset.get(rowKey);
-      const smuHours = entry.smu ?? latestServiceEntryByAsset.get(assetKey)?.smu ?? current?.smuHours ?? 0;
+      const smuHours = Math.max(entry.smu ?? (entry.serviceEntryId ? serviceById.get(entry.serviceEntryId)?.smu : undefined) ?? 0, current?.smuHours ?? 0);
       rowsBySourceAndAsset.set(rowKey, {
+        workOrder,
         fuelSource,
         employee,
         assetNumber: entry.asset,

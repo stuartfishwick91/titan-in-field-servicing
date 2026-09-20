@@ -1,3 +1,4 @@
+import { markPeriodSubmitted } from "../data/submissionReports";
 import { workAreas, workAreaTabs, areaOilSource, prepareAreaUsage, type WorkArea } from "../data/employeeWorkArea";
 import { loadFacilities, loadSiteStock, saveSiteStock } from "../data/siteInventory";
 import { applyStockOperation } from "../data/siteInventoryModel";
@@ -163,9 +164,9 @@ function HomeTab({
   const [trucks] = useState(loadServiceTrucks);
   const [selectedTruckId, setSelectedTruckId] = useState(localStorage.getItem("titan-employee-assigned-truck") ?? user.assignedServiceTruckId ?? "");
   const assignedTruck = trucks.find((truck) => truck.truckId === selectedTruckId);
-  const employeeFuelEntries = fuelEntries.filter((entry) => entry.employee === employee);
-  const serviceEntries = loadServiceEntries().filter((entry) => entry.employee === employee);
-  const dailySubmitted = employeeFuelEntries.length > 0 && employeeFuelEntries.every((entry) => entry.submitted);
+  const employeeFuelEntries = fuelEntries.filter((entry) => entry.employee === employee && entry.date === currentReportDate() && entry.shift === currentFuelShift());
+  const serviceEntries = loadServiceEntries().filter((entry) => entry.employee === employee && entry.date === currentReportDate() && entry.shift === currentFuelShift());
+  const dailySubmitted = employeeFuelEntries.length + serviceEntries.length > 0 && [...employeeFuelEntries, ...serviceEntries].every(entry => entry.submitted);
   const totalCapacity = assignedTruck?.oilGroups.reduce((sum, group) => sum + group.capacity, 0) ?? 0;
   const totalCurrent = assignedTruck?.oilGroups.reduce((sum, group) => sum + group.current, 0) ?? 0;
   const overall = totalCapacity ? Math.round((totalCurrent / totalCapacity) * 100) : 0;
@@ -178,14 +179,8 @@ function HomeTab({
 
   function confirmDailySubmission() {
     const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    const updated = fuelEntries.map((entry) => entry.employee === employee ? {
-      ...entry,
-      date: entry.date ?? currentReportDate(),
-      shift: entry.shift ?? currentFuelShift(),
-      submitted: true,
-      locked: true,
-      submittedAt: time,
-    } : entry);
+    const updated = markPeriodSubmitted(loadFuelSubmissions(), employee, currentReportDate(), currentFuelShift()).map(entry => entry.employee === employee && entry.date === currentReportDate() && entry.shift === currentFuelShift() ? { ...entry, locked: true, submittedAt: time } : entry);
+    saveServiceEntries(markPeriodSubmitted(loadServiceEntries(), employee, currentReportDate(), currentFuelShift()));
     setFuelEntries(updated);
     setSubmittedAt(time);
     localStorage.setItem("titan-daily-fuel-submitted-at", time);
@@ -630,6 +625,7 @@ function ServiceEntryTab({ employee, workArea, onSubmit }: { employee: string; w
       employee,
       assetNumber: loadedAsset.assetNumber,
       workOrder: workArea === "Workshop" || workArea === "Field" ? workOrder.trim() : undefined,
+      workArea,
       make: loadedAsset.make,
       model: loadedAsset.model,
       type: loadedAsset.type,
@@ -655,6 +651,8 @@ function ServiceEntryTab({ employee, workArea, onSubmit }: { employee: string; w
       saveFuelSubmissions([
         {
           id: `fuel-service-${Date.now()}`,
+          serviceEntryId: serviceEntry.id,
+          workOrder: serviceEntry.workOrder,
           date: currentReportDate(),
           shift: currentFuelShift(),
           employee,
@@ -893,12 +891,12 @@ function DailySheetTab({ employee, onSend }: { employee: string; onSend: () => v
   const [entries, setEntries] = useState(loadFuelSubmissions);
   const [serviceEntries, setServiceEntryState] = useState(loadServiceEntries);
   const [assets, setAssets] = useState(loadAssets);
-  const employeeEntries = entries.filter((entry) => entry.employee === employee);
-  const employeeServiceEntries = serviceEntries.filter((entry) => entry.employee === employee);
+  const employeeEntries = entries.filter((entry) => entry.employee === employee && entry.date === currentReportDate() && entry.shift === currentFuelShift());
+  const employeeServiceEntries = serviceEntries.filter((entry) => entry.employee === employee && entry.date === currentReportDate() && entry.shift === currentFuelShift());
   const assetDetails = new Map(assets.map((asset) => [asset.assetNumber.toLowerCase(), asset]));
   const totalMachines = new Set(employeeEntries.map((entry) => entry.asset)).size;
   const totalLitres = employeeEntries.reduce((sum, entry) => sum + entry.litres, 0);
-  const submitted = employeeEntries.length > 0 && employeeEntries.every((entry) => entry.submitted);
+  const submitted = employeeEntries.length + employeeServiceEntries.length > 0 && [...employeeEntries, ...employeeServiceEntries].every(entry => entry.submitted);
 
   useEffect(() => {
     const refreshDailySheet = () => {
@@ -921,21 +919,10 @@ function DailySheetTab({ employee, onSend }: { employee: string; onSend: () => v
   function submitDailyFuelUps() {
     if (!confirm("Submit daily fuel ups? Entries will be locked from editing.")) return;
     const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    const updated = entries.map((entry) =>
-      entry.employee === employee ? {
-        ...entry,
-        date: entry.date ?? currentReportDate(),
-        shift: entry.shift ?? currentFuelShift(),
-        submitted: true,
-        locked: true,
-        submittedAt: time,
-      } : entry,
-    );
+    const updated = markPeriodSubmitted(loadFuelSubmissions(), employee, currentReportDate(), currentFuelShift()).map(entry => entry.employee === employee && entry.date === currentReportDate() && entry.shift === currentFuelShift() ? { ...entry, locked: true, submittedAt: time } : entry);
     setEntries(updated);
     saveFuelSubmissions(updated);
-    const updatedServiceEntries = serviceEntries.map((entry) =>
-      entry.employee === employee ? { ...entry, submitted: true } : entry,
-    );
+    const updatedServiceEntries = markPeriodSubmitted(loadServiceEntries(), employee, currentReportDate(), currentFuelShift());
     setServiceEntryState(updatedServiceEntries);
     saveServiceEntries(updatedServiceEntries);
     onSend();

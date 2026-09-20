@@ -16,6 +16,7 @@ export type ServiceEntryRecord = {
   employee: string;
   assetNumber: string;
   workOrder?: string;
+  workArea?: string;
   make: string;
   model: string;
   type: string;
