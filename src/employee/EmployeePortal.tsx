@@ -111,6 +111,7 @@ export function EmployeePortal() {
     <main className="employee-shell">
       <header className="employee-header">
         <div>
+          {branding.logo && <img className="employee-company-logo" src={branding.logo} alt={`${branding.companyName} logo`} />}
           <span>{branding.companyName}</span>
           <h1>{employee}</h1>
         </div>

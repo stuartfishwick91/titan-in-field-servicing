@@ -2692,7 +2692,7 @@ export function Branding() {
       const next = { ...draft, [field]: image };
       setDraft(next);
       setBranding(next);
-      setMessage("Preview updated.");
+      setMessage("Image updated. Check the shared-trial status above for sync confirmation.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Image upload failed.");
     }
@@ -2725,7 +2725,7 @@ export function Branding() {
       <div className="branding-grid">
         <section className="branding-panel">
           <h3>Company Logo</h3>
-          <p>PNG, JPG, SVG or WEBP. Maximum 5MB.</p>
+          <p>Choose your company logo below. PNG, JPG, SVG or WEBP, up to 5MB. Changes save automatically to shared branding.</p>
           <BrandUpload label="Upload / Replace Logo" accept="image/png,image/jpeg,image/svg+xml,image/webp" onChange={(file) => handleImage("logo", file, ["image/png", "image/jpeg", "image/svg+xml", "image/webp"])} />
           <button className="secondary-button" type="button" onClick={() => { const next = { ...draft, logo: "" }; setDraft(next); setBranding(next); }}>Remove Logo</button>
           <div className="brand-preview logo-preview">{draft.logo ? <img src={draft.logo} alt="Logo preview" /> : <span>T</span>}</div>
@@ -2792,10 +2792,13 @@ export function Branding() {
 
 function BrandUpload({ label, accept, onChange }: { label: string; accept: string; onChange: (file: File | undefined) => void }) {
   return (
-    <label className="brand-upload">
-      <Upload size={18} />
-      {label}
-      <input type="file" accept={accept} onChange={(event) => onChange(event.target.files?.[0])} />
+    <label className="brand-file-upload">
+      <span><Upload size={18} />{label}</span>
+      <input type="file" accept={accept} onChange={(event) => {
+        const file = event.currentTarget.files?.[0];
+        event.currentTarget.value = "";
+        onChange(file);
+      }} />
     </label>
   );
 }

@@ -3858,3 +3858,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 [data-display-mode="light"] :is(.executive-kpi-card,.fuel-kpi-card,.metric-card,.icon-alert-button) { background: var(--surface); color: var(--text); border-color: var(--line); }
 [data-display-mode="light"] .executive-kpi-card :is(span,small) { color: var(--muted); }
 [data-display-mode="light"] .executive-kpi-card.danger strong { color: var(--red); }
+.brand-file-upload { display: grid; gap: 10px; margin: 16px 0; }
+.brand-file-upload > span { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+.brand-file-upload input[type="file"] { position: static; opacity: 1; width: 100%; max-width: 100%; min-width: 0; padding: 8px; cursor: pointer; }
+.brand-file-upload input::file-selector-button { background: var(--yellow); color: #172535; border: 0; border-radius: 6px; padding: 12px; margin-right: 10px; font-weight: 700; cursor: pointer; }
+.brand-preview img { max-width: 100%; max-height: 180px; object-fit: contain; }
+.employee-company-logo { float: left; width: 52px; height: 52px; object-fit: contain; margin-right: 12px; }
+[data-display-mode="light"] .branding-panel { background: var(--surface); color: var(--text); border-color: var(--line); }

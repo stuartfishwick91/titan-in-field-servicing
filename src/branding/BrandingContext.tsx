@@ -64,8 +64,8 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
   const value = useMemo<BrandingContextValue>(() => ({
     branding,
     setBranding: (settings) => {
-      setBrandingState(settings);
       writeSharedItem(STORAGE_KEY, JSON.stringify(settings));
+      setBrandingState(settings);
     },
     resetBranding: () => {
       setBrandingState(defaultBranding);
