@@ -1,3 +1,4 @@
+import { DisplayModeToggle } from "../ui/DisplayModeToggle";
 import { markPeriodSubmitted } from "../data/submissionReports";
 import { workAreas, workAreaTabs, areaOilSource, prepareAreaUsage, type WorkArea } from "../data/employeeWorkArea";
 import { loadFacilities, loadSiteStock, saveSiteStock } from "../data/siteInventory";
@@ -113,12 +114,13 @@ export function EmployeePortal() {
           <span>{branding.companyName}</span>
           <h1>{employee}</h1>
         </div>
+        <DisplayModeToggle />
         <button type="button" onClick={() => { clearCurrentUser(); setEmployee(null); setEmployeeUser(null); }}>Sign out</button>
       </header>
       <section className="phone-surface" onChangeCapture={() => { if (tab === "service" || tab === "refills" || tab === "fuelFarm") dirty.current = true; }}>
         {tab !== "home" && <p className="auto-source-line">Working from: <strong>{workingFrom}</strong></p>}
         {notice && <p className="success-banner">{notice}</p>}
-        {tab === "home" && employeeUser && <HomeTab employee={employee} user={employeeUser} workArea={workArea} onWorkArea={changeWorkArea} onNotice={setNotice} />}
+        {tab === "home" && employeeUser && <HomeTab employee={employee} user={employeeUser} workArea={workArea} onWorkArea={changeWorkArea} onStart={() => changeTab(workArea === "Fuel Farm" ? "fuelFarm" : "service")} onNotice={setNotice} />}
         {tab === "service" && <ServiceEntryTab workArea={workArea} employee={employee} onSubmit={() => { dirty.current = false; setNotice("Service entry submitted to the shift sheet."); }} />}
         {tab === "fuelFarm" && <FuelFarmEntryTab employee={employee} onSaved={() => { dirty.current = false; }} />}
         {tab === "refills" && <RefillsTab workArea={workArea} onSubmit={() => { dirty.current = false; setNotice("Refill recorded successfully."); }} />}
@@ -145,13 +147,14 @@ export function EmployeePortal() {
 }
 
 function HomeTab({
-  workArea, onWorkArea,
+  workArea, onWorkArea, onStart,
   employee,
   user,
   onNotice,
 }: {
   workArea: WorkArea;
   onWorkArea: (area: WorkArea) => void;
+  onStart: () => void;
   employee: string;
   user: ManagedUser;
   onNotice: (message: string) => void;
@@ -200,20 +203,13 @@ function HomeTab({
     <div className="employee-tab employee-home" data-local-preference>
       <p className="eyebrow">{currentFuelShift()} — Presentation trial</p>
       <h2>Welcome, {employee.split(" ")[0]}</h2>
-      <LocalBackupButton />
-      <section className="employee-home-card supervisor-card">
-        <div className="employee-card-head">
-          <div>
-            <strong>Example Notice</strong>
-            <span>Presentation sample</span>
-          </div>
-          <em className={messageRead ? "priority-badge acknowledged" : "priority-badge warning"}>{messageRead ? "Acknowledged" : "Warning"}</em>
-        </div>
-        <p>Example only: a supervisor notice would appear here. Live supervisor messaging is not enabled in this trial.</p>
-        {!messageRead && <button className="secondary-button" type="button" onClick={markMessageRead}>Mark as Read</button>}
-      </section>
-
-      <section className="employee-home-card"><h3>Work Area</h3><label>Where are you working?<select value={workArea} onChange={event => onWorkArea(event.target.value as WorkArea)}>{workAreas.map(area => <option key={area}>{area}</option>)}</select></label><p>The bottom navigation and stock source follow your selected area.</p></section>
+      <section className="employee-home-card work-area-card"><span className="eyebrow">01 / Start your shift</span><h3>Choose your work area</h3><label>Where are you working?<select value={workArea} onChange={event => onWorkArea(event.target.value as WorkArea)}>{workAreas.map(area => <option key={area}>{area}</option>)}</select></label>{workArea === "Service Truck" && (            <label className="employee-truck-select">Truck employee is in
+              <select value={assignedTruck?.truckId ?? ""} onChange={(event) => selectAssignedTruck(event.target.value)}>
+                <option value="">Select your service truck</option>
+                {trucks.map((truck) => <option key={truck.truckId}>{truck.truckId}</option>)}
+              </select>
+            </label>)}<p>Your selection sets the stock source for entries.</p></section>
+      <section className="employee-home-card next-action-card"><span className="eyebrow">02 / Ready to work</span><h3>{workArea === "Fuel Farm" ? "Record a fuel-up" : "Start a service entry"}</h3><p>{workArea === "Service Truck" ? assignedTruck ? "Working from " + assignedTruck.truckId : "Choose a truck above before starting." : "Working from " + workArea}</p><button type="button" className="primary-button wide-button" disabled={workArea === "Service Truck" && !assignedTruck} onClick={onStart}>{workArea === "Fuel Farm" ? "Start fuel entry" : "Scan or enter an asset"}</button></section>
       {workArea === "Service Truck" ? (
         <>
           <section className="employee-home-card assigned-truck-card">
@@ -224,12 +220,7 @@ function HomeTab({
               </div>
               <em className="priority-badge acknowledged">{assignedTruck?.status}</em>
             </div>
-            <label className="employee-truck-select">Truck employee is in
-              <select value={assignedTruck?.truckId ?? ""} onChange={(event) => selectAssignedTruck(event.target.value)}>
-                <option value="">Select your service truck</option>
-                {trucks.map((truck) => <option key={truck.truckId}>{truck.truckId}</option>)}
-              </select>
-            </label>
+
             <div className="employee-truck-summary">
               <Truck size={34} />
               <div>
@@ -264,6 +255,7 @@ function HomeTab({
         </section>
       )}
 
+      <details className="employee-utilities"><summary>Device tools</summary><LocalBackupButton /></details>
       {(workArea === "Fuel Farm" || workArea === "Service Truck") && <section className="employee-home-card">
         <div className="employee-card-head">
           <div>
@@ -497,6 +489,7 @@ function ServiceEntryTab({ employee, workArea, onSubmit }: { employee: string; w
   const [oilDraft, setOilDraft] = useState<OilDraft>({});
   const [generalComments, setGeneralComments] = useState("");
   const [workOrder, setWorkOrder] = useState("");
+  const [reviewing, setReviewing] = useState(false);
   const [localMessage, setLocalMessage] = useState("");
   const [assignedTruckId, setAssignedTruckId] = useState(localStorage.getItem("titan-employee-assigned-truck") ?? loadCurrentUser()?.assignedServiceTruckId ?? "");
   const assignedTruck = trucks.find((truck) => truck.truckId === assignedTruckId);
@@ -671,6 +664,7 @@ function ServiceEntryTab({ employee, workArea, onSubmit }: { employee: string; w
     saveSiteStock(nextStock);
 
     setLoadedAsset(null);
+    setReviewing(false);
     setWorkOrder("");
     setManualAsset("");
     setCurrentSmu("");
@@ -686,6 +680,7 @@ function ServiceEntryTab({ employee, workArea, onSubmit }: { employee: string; w
   return (
     <div className="employee-form service-entry-redesign">
       <h2>Service Entry</h2>
+      <ol className="entry-steps" aria-label="Entry progress"><li className={!loadedAsset ? "current" : "complete"}>1. Asset</li><li className={loadedAsset && !reviewing ? "current" : ""}>2. Service details</li><li className={reviewing ? "current" : ""}>3. Review</li></ol>
       {localMessage && <p className="success-banner">{localMessage}</p>}
       <button className="primary-button wide-button scan-asset-button" type="button" onClick={scanAsset}><QrCode size={18} /> Scan QR Asset</button>
       {scanning && <AssetQrScanner onClose={() => setScanning(false)} onScan={payload => {
@@ -698,6 +693,7 @@ function ServiceEntryTab({ employee, workArea, onSubmit }: { employee: string; w
         <label>Asset Number<input value={manualAsset} onChange={(event) => setManualAsset(event.target.value)} placeholder="Enter asset number" /></label>
         <button className="secondary-button" type="button" onClick={() => loadAsset(manualAsset)}>Load Asset</button>
       </div>
+      {reviewing && loadedAsset && <div className="cloud-overlay"><section className="entry-review" role="dialog" aria-modal="true" aria-label="Review service entry"><h2>Review service entry</h2><p>Check these details before submitting.</p><dl><div><dt>Asset</dt><dd>{loadedAsset.assetNumber}</dd></div><div><dt>Working from</dt><dd>{workArea === "Service Truck" ? assignedTruckId : workArea}</dd></div><div><dt>JD Edwards work order</dt><dd>{workOrder || "Not entered"}</dd></div><div><dt>SMU</dt><dd>{currentSmu || "Not entered"}</dd></div><div><dt>Fuel</dt><dd>{fuelAdded || "0"} L</dd></div>{loadedAsset.oilConfiguration.filter(oil => oil.active && (oilDraft[oil.id]?.litres ?? 0) > 0).map(oil => <div key={oil.id}><dt>{oil.product}</dt><dd>{oilDraft[oil.id].litres} L</dd></div>)}</dl><p>{generalComments}</p><div className="button-row"><button type="button" className="secondary-button" onClick={() => setReviewing(false)}>Back to edit</button><button type="button" className="primary-button" onClick={submitServiceEntry}>Confirm and submit</button></div></section></div>}
       {loadedAsset && (
         <>
           <section className="service-asset-summary">
@@ -710,7 +706,7 @@ function ServiceEntryTab({ employee, workArea, onSubmit }: { employee: string; w
               <div><dt>Last SMU</dt><dd>{lastSmu.toLocaleString()}</dd></div>
             </dl>
           </section>
-          {(workArea === "Workshop" || workArea === "Field") && <label>Work Order Number<input value={workOrder} onChange={event => setWorkOrder(event.target.value)} placeholder="Enter work order number" /></label>}
+          {(workArea === "Workshop" || workArea === "Field") && <label>JD Edwards Work Order<input value={workOrder} onChange={event => setWorkOrder(event.target.value)} placeholder="Enter the JD Edwards work order number" /></label>}
           <label>Current SMU *
             <input inputMode="numeric" type="number" value={currentSmu} onChange={(event) => setCurrentSmu(event.target.value)} />
           </label>
@@ -770,7 +766,7 @@ function ServiceEntryTab({ employee, workArea, onSubmit }: { employee: string; w
           <label>General Comments
             <textarea value={generalComments} onChange={(event) => setGeneralComments(event.target.value)} placeholder="Optional service comments" />
           </label>
-          <button className="primary-button wide-button" type="button" onClick={submitServiceEntry}><Send size={18} /> Submit Service Entry</button>
+          <button className="primary-button wide-button" type="button" onClick={() => setReviewing(true)}><ClipboardCheck size={18} /> Review Service Entry</button>
         </>
       )}
     </div>

@@ -1,3 +1,4 @@
+import { DisplayModeToggle } from "../ui/DisplayModeToggle";
 import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import {
   Building2,
@@ -116,6 +117,7 @@ export function ManagementPortal() {
             <span>In-Field Servicing</span>
           </div>
         </div>
+        <DisplayModeToggle />
         <nav className="nav-stack">
           {filteredNavGroups.map((group) => (
             <section key={group.title}>

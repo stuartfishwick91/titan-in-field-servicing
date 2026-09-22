@@ -70,8 +70,8 @@ export function Dashboard() {
     <div className="executive-dashboard">
       <header className="executive-header">
         <div>
-          <h1>Dashboard</h1>
-          <p>Read-only executive overview of in-field servicing operations</p>
+          <span className="eyebrow">Titan / Operations</span><h1>Site overview</h1>
+          <p>Today’s activity, stock levels and items needing attention.</p>
         </div>
         <div className="bulk-header-actions">
           <span className="date-button">{new Date().toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" })}</span>
@@ -80,6 +80,7 @@ export function Dashboard() {
         </div>
       </header>
 
+      <section className="attention-panel"><div className="section-heading-row"><div><span className="eyebrow">Supervisor priorities</span><h2>{activeAlertCount ? activeAlertCount + " items need attention" : "No active stock alerts"}</h2></div><button className="secondary-button" type="button" onClick={() => navigate("/management/reports")}>View daily activity</button></div><div className="attention-list">{[...liveAlerts].sort((a,b) => Number(b.severity === "critical") - Number(a.severity === "critical")).slice(0,3).map(alert => <button type="button" key={alert.id} className={"attention-item " + alert.severity} onClick={() => navigate(alertRoute(alert.module))}><span>{alert.severity === "critical" ? "Critical" : "Review"}</span><strong>{alert.title}</strong><small>{alert.detail}</small></button>)}</div>{activeAlertCount > 3 && <button type="button" className="secondary-button" onClick={() => setShowAlertDetails(true)}>View all {activeAlertCount} alerts</button>}</section>
       <section className="executive-kpis">
         <KpiCard icon={<Fuel size={22} />} label="Fuel Used Today" value={`${litres(metrics.fuelLitres)} L`} detail="Recorded fuel entries today" />
         <KpiCard icon={<Droplets size={22} />} label="Oil Used Today" value={`${litres(metrics.oilLitres)} L`} detail="Recorded service oils and coolant today" />
