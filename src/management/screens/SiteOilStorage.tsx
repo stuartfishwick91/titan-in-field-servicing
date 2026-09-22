@@ -1,3 +1,5 @@
+import { stockLevel, type StockLevel } from "../../data/stockLevelAlerts";
+import { loadSystemAlertSettings } from "../../data/systemSettingsStore";
 import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { applyStockOperation, departments, summarizeSiteStock, movementKind, type Department, type StockOperation } from "../../data/siteInventoryModel";
@@ -6,15 +8,15 @@ import { loadFacilities, loadSiteStock, loadStockAudit, saveFacilities, saveSite
 const litresText = (value: number) => `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })} L`;
 const productName = (value: string) => ({ "engine-15w40": "Engine Oil 15W-40", "hydraulic-46": "Hydraulic Oil 46", "hydraulic-32": "Hydraulic Oil 32", transmission: "Transmission Oil", diesel: "Diesel", coolant: "Coolant", "waste-oil": "Waste Oil" }[value] ?? value);
 
-function StorageCard({ name, location, current, capacity, expected, shortage, surplus, children }: { name: string; location: string; current: number; capacity: number; expected: number; shortage: number; surplus: number; children?: ReactNode }) {
+function StorageCard({ name, location, current, capacity, expected, shortage, surplus, level = "normal", children }: { name: string; location: string; current: number; capacity: number; expected: number; shortage: number; surplus: number; level?: StockLevel; children?: ReactNode }) {
   const percent = capacity > 0 ? current / capacity * 100 : null;
   return <article className="bulk-level-card site-storage-card">
     <span className="site-storage-location">{location}</span><h3>{name}</h3>
-    <div className="large-ring green" role="img" aria-label={`${name}: ${percent === null ? "capacity not set" : `${percent.toFixed(1)} percent full`}`} style={{ "--level": `${Math.min(100, Math.max(0, percent ?? 0))}%` } as CSSProperties}>
+    <div className={`large-ring ${level === "critical" ? "orange" : level === "warning" ? "yellow" : "green"}`} role="img" aria-label={`${name}: ${percent === null ? "capacity not set" : `${percent.toFixed(1)} percent full`}`} style={{ "--level": `${Math.min(100, Math.max(0, percent ?? 0))}%` } as CSSProperties}>
       <div><strong>{percent === null ? "—" : `${Math.round(percent)}%`}</strong><span>Full</span></div>
     </div>
     <b>{litresText(current)} / {litresText(capacity)}</b>
-    <span className="site-storage-location">Recorded stock / capacity</span>
+    <span className="site-storage-location">Recorded stock / capacity</span><strong>{level === "critical" ? "Critical stock alert" : level === "warning" ? "Stock warning" : ""}</strong>
     <dl className="site-storage-balances">
       <div><dt>Expected</dt><dd>{litresText(expected)}</dd></div>
       <div className={shortage > 0 ? "site-storage-shortage" : ""}><dt>Shortage</dt><dd>{litresText(shortage)}</dd></div>
@@ -27,6 +29,7 @@ function StorageCard({ name, location, current, capacity, expected, shortage, su
 export function SiteOilStorage({ initialDepartment = "Site total" }: { initialDepartment?: Department | "Site total" }) {
   const [department, setDepartment] = useState<Department | "Site total">(initialDepartment);
   const [rows, setRows] = useState(loadSiteStock);
+  const [alertSettings, setAlertSettings] = useState(loadSystemAlertSettings);
   const [history, setHistory] = useState(loadStockAudit);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -41,8 +44,8 @@ export function SiteOilStorage({ initialDepartment = "Site total" }: { initialDe
   const [editingId, setEditingId] = useState<string | null>(null);
   const [category, setCategory] = useState("Oils");
   useEffect(() => {
-    const refresh = () => { setRows(loadSiteStock()); setHistory(loadStockAudit()); };
-    const events = ["storage", "titan-bulk-tanks-updated", "titan-workshop-stock-updated", "titan-service-trucks-updated", "titan-site-stock-updated"];
+    const refresh = () => { setRows(loadSiteStock()); setHistory(loadStockAudit()); setAlertSettings(loadSystemAlertSettings()); };
+    const events = ["storage", "titan-bulk-tanks-updated", "titan-workshop-stock-updated", "titan-service-trucks-updated", "titan-site-stock-updated", "titan-system-settings-updated"];
     events.forEach(event => window.addEventListener(event, refresh));
     return () => events.forEach(event => window.removeEventListener(event, refresh));
   }, []);
@@ -92,9 +95,9 @@ export function SiteOilStorage({ initialDepartment = "Site total" }: { initialDe
     {error && <p role="alert" className="form-warning">{error}</p>}
     {message && <p className="success-banner">{message}</p>}
     <h2>{department} — product totals</h2>
-    <p>Shortages and surpluses are shown separately; they are not cancelled against another location. Stock figures include recorded movements since the last physical count, not live tank sensor readings.</p>
+    <p>Shortages and surpluses are shown separately; they are not cancelled against another location. Product-total gauge alerts reflect the most severe compartment alert, so a full tank cannot hide another tank’s low stock. Stock figures include recorded movements since the last physical count, not live tank sensor readings.</p>
     <div className="site-storage-grid">
-      {totals.map(row => <StorageCard key={row.productId} name={productName(row.productId)} location={`${department} · combined storage`} {...row} capacity={visible.filter(item => item.productId === row.productId).reduce((sum, item) => sum + item.capacity, 0)} />)}
+      {totals.map(row => <StorageCard key={row.productId} level={visible.some(item => item.productId === row.productId && stockLevel(item, alertSettings) === "critical") ? "critical" : visible.some(item => item.productId === row.productId && stockLevel(item, alertSettings) === "warning") ? "warning" : "normal"} name={productName(row.productId)} location={`${department} · combined storage`} {...row} capacity={visible.filter(item => item.productId === row.productId).reduce((sum, item) => sum + item.capacity, 0)} />)}
     </div>
     {!totals.length && <p>No compartments configured for this view. Add a compartment below to see its storage level.</p>}
     <details className="site-storage-details"><summary>View product totals as a table</summary>
@@ -105,7 +108,7 @@ export function SiteOilStorage({ initialDepartment = "Site total" }: { initialDe
     </details>
     <h2>Department compartments</h2>
     <div className="site-storage-grid">
-      {visible.map(row => <StorageCard key={row.key} name={row.name} location={`${row.department} · ${productName(row.productId)}`} current={row.current} capacity={row.capacity} expected={row.expected} shortage={Math.max(0, row.expected - row.current)} surplus={Math.max(0, row.current - row.expected)}>
+      {visible.map(row => <StorageCard key={row.key} level={stockLevel(row, alertSettings)} name={row.name} location={`${row.department} · ${productName(row.productId)}`} current={row.current} capacity={row.capacity} expected={row.expected} shortage={Math.max(0, row.expected - row.current)} surplus={Math.max(0, row.current - row.expected)}>
         {row.department === "Field" || row.department === "Light Vehicles" ? <div className="site-compartment-actions">
           <button type="button" onClick={() => { setDepartment(row.department); setEditingId(row.key.replace("facility:", "")); setName(row.name); setProduct(row.productId); setCapacity(String(row.capacity)); setOpening(String(row.current)); window.dispatchEvent(new Event("titan-cloud-form-edited")); requestAnimationFrame(() => document.getElementById("facility-compartment-form")?.scrollIntoView({ behavior: "smooth" })); }}>Edit compartment</button>
           <button type="button" onClick={() => { const id = row.key.replace("facility:", ""); const current = loadFacilities().find(item => item.id === id); if (!current) return; if (current.current !== 0 || current.expected !== 0) { setError("Transfer or reconcile remaining stock before removing this compartment."); return; } if (confirm(`Remove ${row.name}?`)) { saveFacilities(loadFacilities().filter(item => item.id !== id)); setMessage("Compartment removed."); } }}>Remove</button>

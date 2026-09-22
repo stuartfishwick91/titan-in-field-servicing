@@ -1,3 +1,4 @@
+import { stockLevel } from "../../data/stockLevelAlerts";
 import { AlertTriangle, Bell, ClipboardCheck, Droplets, Fuel, Truck, UserRound } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import { useBranding } from "../../branding/BrandingContext";
@@ -161,7 +162,7 @@ export function Dashboard() {
                         <td>{litres(group.current)}</td>
                         <td>
                           <div className="percent-cell">
-                            <span className={`mini-bar ${group.tone}`}><i style={{ width: `${percent}%` }} /></span>
+                            <span className={`mini-bar ${dashboardTankTone("green", stockLevel({ key: group.name, department: "Service Trucks", name: group.name, productId: group.productId ?? productIdForName(group.name), current: group.current, expected: group.current, capacity: group.capacity }, alertSettings))}`}><i style={{ width: `${percent}%` }} /></span>
                             <b>{percent}%</b>
                           </div>
                         </td>
@@ -236,16 +237,18 @@ function loadDashboardBulkStorage(): GaugeItem[] {
 
 function dashboardBulkTone(tank: GaugeItem, alertSettings: ReturnType<typeof loadSystemAlertSettings>) {
   if (productIdForName(tank.name) === "waste-oil") {
-    if (tank.percent >= alertSettings.bulkWasteOilCriticalPercent) return "orange";
-    if (tank.percent >= alertSettings.bulkWasteOilWarningPercent) return "yellow";
+    if (tank.current / tank.capacity * 100 >= alertSettings.bulkWasteOilCriticalPercent) return "orange";
+    if (tank.current / tank.capacity * 100 >= alertSettings.bulkWasteOilWarningPercent) return "yellow";
     return "green";
   }
-  return dashboardTankTone(tank.tone, levelAlertTone(tank.percent, alertSettings.bulkLowLevelPercent, alertSettings.bulkCriticalLevelPercent));
+  return dashboardTankTone("green", levelAlertTone(tank.capacity > 0 ? tank.current / tank.capacity * 100 : 100, alertSettings.bulkLowLevelPercent, alertSettings.bulkCriticalLevelPercent));
 }
 
 function alertRoute(moduleName: string) {
   const routes: Record<string, string> = {
-    "Bulk Storage": "/management/bulk-storage",
+    "Bulk Storage": "/management/bulk-tanks",
+    "Field Storage": "/management/field-storage",
+    "Light Vehicles": "/management/bulk-storage",
     "Workshop Storage": "/management/workshop-storage",
     "Service Trucks": "/management/service-trucks",
     "Live Fuel Status": "/management/live-fuel-status",

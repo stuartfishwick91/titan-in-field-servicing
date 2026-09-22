@@ -1,3 +1,4 @@
+import { stockLevel } from "../../data/stockLevelAlerts";
 import { submissionHeaders, submissionReportRows, csvReport, submissionWorkbook } from "../../data/submissionReports";
 import { loadServiceEntries } from "../../data/serviceEntryStore";
 import { loadFuelSubmissions } from "../../data/fuelSubmissionStore";
@@ -855,7 +856,7 @@ export function ServiceTrucks() {
   const fuelCurrent = fuelGroups.reduce((sum, item) => sum + item.current, 0);
   const fuelPercent = fuelCapacity ? Math.round((fuelCurrent / fuelCapacity) * 100) : 0;
   const serviceAlertSettings = loadSystemAlertSettings();
-  const fuelTone = serviceTruckLevelTone(fuelPercent, serviceAlertSettings);
+  const fuelTone = serviceTruckLevelTone(fuelCapacity > 0 ? fuelCurrent / fuelCapacity * 100 : 100, serviceAlertSettings);
 
   useEffect(() => {
     const refresh = () => setTrucksState(loadServiceTrucks());
@@ -1015,7 +1016,7 @@ export function ServiceTrucks() {
               <tbody>
                 {truckOilGroups.map((group) => {
                   const percent = Math.round((group.current / group.capacity) * 100);
-                  const tone = serviceTruckLevelTone(percent, serviceAlertSettings);
+                  const tone = cardTone("green", stockLevel({ key: group.name, department: "Service Trucks", name: group.name, productId: group.productId ?? productIdForName(group.name), current: group.current, expected: group.current, capacity: group.capacity }, serviceAlertSettings));
                   return (
                     <tr key={group.name}>
                       <td><strong>{group.name}</strong><span>{group.system}</span></td>
@@ -2663,15 +2664,15 @@ function storageLevelTone(percent: number, lowPercent: number, criticalPercent: 
 
 function bulkTankTone(tank: LocalTank, alertSettings: SystemAlertSettings) {
   if (productIdForName(tank.name) === "waste-oil") {
-    if (tank.percent >= alertSettings.bulkWasteOilCriticalPercent) return "orange";
-    if (tank.percent >= alertSettings.bulkWasteOilWarningPercent) return "yellow";
+    if (tank.current / tank.capacity * 100 >= alertSettings.bulkWasteOilCriticalPercent) return "orange";
+    if (tank.current / tank.capacity * 100 >= alertSettings.bulkWasteOilWarningPercent) return "yellow";
     return "green";
   }
   return storageLevelTone(tank.percent, alertSettings.bulkLowLevelPercent, alertSettings.bulkCriticalLevelPercent);
 }
 
 function workshopTankTone(tank: WorkshopStockRecord, alertSettings: SystemAlertSettings) {
-  const percent = Math.round((tank.current / tank.capacity) * 100);
+  const percent = tank.capacity > 0 ? tank.current / tank.capacity * 100 : 100;
   if (tank.productId === "waste-oil" || productIdForName(tank.name) === "waste-oil") {
     if (percent >= alertSettings.workshopWasteOilCriticalPercent) return "orange";
     if (percent >= alertSettings.workshopWasteOilWarningPercent) return "yellow";
@@ -2908,14 +2909,14 @@ export function SystemSettings() {
             onCritical={(value) => updateSetting("bulkWasteOilCriticalPercent", value)}
           />
           <LevelAlertField
-            title="Workshop Storage Level Alerts"
+            title="Workshop, Field and Light Vehicle Level Alerts"
             low={settings.workshopLowLevelPercent}
             critical={settings.workshopCriticalLevelPercent}
             onLow={(value) => updateSetting("workshopLowLevelPercent", value)}
             onCritical={(value) => updateSetting("workshopCriticalLevelPercent", value)}
           />
           <WasteOilAlertField
-            title="Workshop Waste Oil Storage Alerts"
+            title="Workshop, Field, Light Vehicle and Truck Waste Oil Alerts"
             warning={settings.workshopWasteOilWarningPercent}
             critical={settings.workshopWasteOilCriticalPercent}
             onWarning={(value) => updateSetting("workshopWasteOilWarningPercent", value)}
