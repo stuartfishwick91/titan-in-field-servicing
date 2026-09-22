@@ -39,7 +39,8 @@ const navGroups = [
   {
     title: "Operations",
     items: [
-      { to: "/management/bulk-storage", label: "Bulk Storage", icon: Droplets },
+      { to: "/management/bulk-storage", label: "Site Storage", icon: Building2 },
+      { to: "/management/bulk-tanks", label: "Bulk Storage", icon: Droplets },
       { to: "/management/workshop-storage", label: "Workshop Storage", icon: Wrench },
       { to: "/management/field-storage", label: "Field Storage", icon: Droplets },
       { to: "/management/service-trucks", label: "Service Trucks", icon: Truck },
