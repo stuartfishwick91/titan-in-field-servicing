@@ -110,12 +110,8 @@ export function ManagementPortal() {
   return (
     <div className="management-shell">
       <aside className="sidebar">
-        <div className="brand-block">
-          <span className="brand-mark">{branding.logo ? <img src={branding.logo} alt="Company logo" /> : "T"}</span>
-          <div>
-            <strong>{branding.companyName}</strong>
-            <span>In-Field Servicing</span>
-          </div>
+        <div className="sidebar-company-logo">
+          <img src={branding.logo || `${import.meta.env.BASE_URL}branding/titan-wordmark.png`} alt={branding.companyName} />
         </div>
         <DisplayModeToggle />
         <nav className="nav-stack">
