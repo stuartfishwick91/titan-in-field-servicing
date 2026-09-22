@@ -1,4 +1,3 @@
-import { DisplayModeToggle } from "../ui/DisplayModeToggle";
 import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import {
   Building2,
@@ -113,7 +112,6 @@ export function ManagementPortal() {
         <div className="sidebar-company-logo">
           <img src={branding.logo || `${import.meta.env.BASE_URL}branding/titan-wordmark.png`} alt={branding.companyName} />
         </div>
-        <DisplayModeToggle />
         <nav className="nav-stack">
           {filteredNavGroups.map((group) => (
             <section key={group.title}>

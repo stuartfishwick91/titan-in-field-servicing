@@ -1,4 +1,3 @@
-import { DisplayModeToggle } from "../ui/DisplayModeToggle";
 import { markPeriodSubmitted } from "../data/submissionReports";
 import { workAreas, workAreaTabs, areaOilSource, prepareAreaUsage, type WorkArea } from "../data/employeeWorkArea";
 import { loadFacilities, loadSiteStock, saveSiteStock } from "../data/siteInventory";
@@ -115,7 +114,6 @@ export function EmployeePortal() {
           <span>{branding.companyName}</span>
           <h1>{employee}</h1>
         </div>
-        <DisplayModeToggle />
         <button type="button" onClick={() => { clearCurrentUser(); setEmployee(null); setEmployeeUser(null); }}>Sign out</button>
       </header>
       <section className="phone-surface" onChangeCapture={() => { if (tab === "service" || tab === "refills" || tab === "fuelFarm") dirty.current = true; }}>

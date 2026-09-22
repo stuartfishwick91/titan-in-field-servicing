@@ -3787,8 +3787,6 @@ th {
 .employee-shell button, .management-shell .primary-button, .management-shell .secondary-button { min-height: 44px; border-radius: 9px; }
 .employee-header { gap: 10px; }
 .employee-header h1 { font-size: 22px; }
-.display-mode-toggle { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 10px 12px; border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 9px; font-size: 12px; white-space: nowrap; }
-.sidebar > .display-mode-toggle { margin: 16px 0; }
 .content { background-image: none !important; }
 .phone-surface { background-image: none !important; }
 .employee-home-card, .refill-compartment-card, .service-asset-summary, .original-panel, .executive-panel, .site-storage-card { border-radius: 14px; box-shadow: 0 3px 14px #00000012; }
@@ -3819,51 +3817,20 @@ th {
 .attention-item small { color: var(--muted); font-weight: 400; }
 .attention-panel > button { margin-top: 16px; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3px solid #499dea; outline-offset: 3px; }
-:root[data-display-mode="light"] { color-scheme: light; --bg: #edf1f5; --surface: #fff; --surface-2: #f5f7fa; --line: #cbd5df; --text: #172535; --muted: #4e6174; --green: #187a44; --red: #bd3035; --blue: #1763ac; --brand-secondary: #fff; --steel: #d9e1e9; }
-[data-display-mode="light"] :is(.sidebar,.employee-header,.bottom-tabs,.employee-home-card,.refill-compartment-card,.service-asset-summary,.original-panel,.executive-panel,.panel,.detail-panel,.bulk-level-card,.read-only-gauge-card,.kpi-card,.dashboard-truck-card,.daily-section,.employee-fuel-list article,.employee-modal-panel,.stock-card) { background: var(--surface); color: var(--text); border-color: var(--line); }
-[data-display-mode="light"] :is(.management-shell,.employee-shell) :is(input,select,textarea) { background: #fff; color: #172535; border: 1px solid #8799ac; }
-[data-display-mode="light"] :is(.management-shell,.employee-shell) :is(input,select,textarea):disabled { background: #e9eef3; color: #46576b; opacity: 1; }
-[data-display-mode="light"] :is(.management-shell,.employee-shell) :is(h1,h2,h3,h4,strong,b,dt,dd,th,td) { color: inherit; }
-[data-display-mode="light"] :is(.nav-link,.secondary-button,.date-button,.admin-card,.truck-detail-list,.stock-tabs,.detail-grid article,.shift-status-grid article) { color: var(--text); background: var(--surface-2); border-color: var(--line); }
-[data-display-mode="light"] :is(.nav-link.active,.bottom-tabs button.active) { color: #172535; background: #fff0b2; }
-[data-display-mode="light"] :is(.primary-button,.cloud-overlay button) { color: #172535; background: #ffc20e; }
-[data-display-mode="light"] .large-ring div { background: #fff; color: #172535; }
-[data-display-mode="light"] .cloud-overlay section { background: #fff; color: #172535; }
-[data-display-mode="light"] :is(.employee-shell,.management-shell) a { color: #805b00; }
-[data-display-mode="light"] .eyebrow, [data-display-mode="light"] .nav-stack h2 { color: #745300; }
-[data-display-mode="light"] .site-storage-shortage { color: #9b3700; }
-[data-display-mode="light"] .sidebar-hero-preview { display: none; }
-[data-display-mode="light"] :is(.stock-table,.site-stock-table,.data-table) :is(th,td) { background: var(--surface); border-color: var(--line); }
 @media (max-width: 600px) {
- .employee-header .display-mode-toggle { padding: 8px; min-width: 44px; }
- .employee-header .display-mode-toggle span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
  .employee-header h1 { font-size: 19px; }
  .employee-home-card { padding: 18px; }
  .attention-panel { padding: 18px; }
  .attention-panel .section-heading-row { flex-wrap: wrap; gap: 8px; }
 }
 .employee-shell :is(input,select,textarea) { background: var(--surface-2); color: var(--text); border: 1px solid var(--line); padding: 12px; }
-[data-display-mode="light"] .phone-surface { background: var(--bg); color: var(--text); }
-[data-display-mode="light"] .employee-header > button { color: #172535; }
-[data-display-mode="light"] .bottom-tabs button { color: #4e6174; }
-[data-display-mode="light"] .employee-card-head span { color: #4e6174; }
-[data-display-mode="light"] .employee-home-card .eyebrow { color: #745300; }
 
-[data-display-mode="light"] .employee-shell { background: var(--bg); }
-[data-display-mode="light"] .bottom-tabs button { background: transparent; }
-[data-display-mode="light"] .bottom-tabs button.active { background: #fff0b2; color: #172535; }
-[data-display-mode="light"] .employee-header > div > span { color: #745300; }
-.employee-header .display-mode-toggle span { color: inherit; }
 
-[data-display-mode="light"] :is(.executive-kpi-card,.fuel-kpi-card,.metric-card,.icon-alert-button) { background: var(--surface); color: var(--text); border-color: var(--line); }
-[data-display-mode="light"] .executive-kpi-card :is(span,small) { color: var(--muted); }
-[data-display-mode="light"] .executive-kpi-card.danger strong { color: var(--red); }
 .brand-file-upload { display: grid; gap: 10px; margin: 16px 0; }
 .brand-file-upload > span { display: flex; align-items: center; gap: 8px; font-weight: 700; }
 .brand-file-upload input[type="file"] { position: static; opacity: 1; width: 100%; max-width: 100%; min-width: 0; padding: 8px; cursor: pointer; }
 .brand-file-upload input::file-selector-button { background: var(--yellow); color: #172535; border: 0; border-radius: 6px; padding: 12px; margin-right: 10px; font-weight: 700; cursor: pointer; }
 .brand-preview img { max-width: 100%; max-height: 180px; object-fit: contain; }
 .employee-company-logo { float: left; width: 52px; height: 52px; object-fit: contain; margin-right: 12px; }
-[data-display-mode="light"] .branding-panel { background: var(--surface); color: var(--text); border-color: var(--line); }
 .sidebar-company-logo { width: 100%; padding: 12px 0 16px; }
 .sidebar-company-logo img { display: block; width: 100%; height: auto; max-height: 180px; object-fit: contain; }
