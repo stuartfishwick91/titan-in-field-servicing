@@ -84,19 +84,35 @@ export function useBranding() {
   return context;
 }
 
-export function fileToDataUrl(file: File, allowedTypes: string[], maxSizeMb = 5) {
-  return new Promise<string>((resolve, reject) => {
-    if (!allowedTypes.includes(file.type)) {
-      reject(new Error("Unsupported file type."));
-      return;
+export async function fileToDataUrl(file: File, allowedTypes: string[], maxSizeMb = 5): Promise<string> {
+  if (!allowedTypes.includes(file.type)) throw new Error("Unsupported file type.");
+  if (file.size > maxSizeMb * 1024 * 1024) throw new Error(`File must be ${maxSizeMb}MB or smaller.`);
+  const url = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("Could not read this image. Try a PNG or JPG version."));
+      image.src = url;
+    });
+    if (!image.naturalWidth || !image.naturalHeight) throw new Error("Image has no usable dimensions.");
+    // Bound embedded images before shared records and their recovery copy are saved.
+    // WebP preserves transparent logo backgrounds, unlike JPEG.
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Image processing is unavailable in this browser.");
+    let edge = 1200;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const scale = Math.min(1, edge / Math.max(image.naturalWidth, image.naturalHeight));
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const result = canvas.toDataURL("image/webp", 0.85);
+      if (result.length <= 160_000 && result.startsWith("data:image/")) return result;
+      edge = Math.round(edge * 0.75);
     }
-    if (file.size > maxSizeMb * 1024 * 1024) {
-      reject(new Error(`File must be ${maxSizeMb}MB or smaller.`));
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error("Could not read file."));
-    reader.readAsDataURL(file);
-  });
+    throw new Error("This image is too detailed to save. Please choose a smaller logo image.");
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
